@@ -3,6 +3,7 @@ name: Build Android APK
 on:
   push:
     branches: [main, master]
+    tags: ['v*']
   workflow_dispatch:
 
 jobs:
@@ -26,8 +27,21 @@ jobs:
         working-directory: android
         run: gradle assembleDebug --no-daemon
 
-      - name: Upload APK
+      - name: Rename APK
+        run: cp android/app/build/outputs/apk/debug/app-debug.apk HomeKTV-debug.apk
+
+      - name: Upload APK (每次构建都可下载)
         uses: actions/upload-artifact@v4
         with:
-          name: home-ktv-apk
-          path: android/app/build/outputs/apk/debug/app-debug.apk
+          name: HomeKTV-debug-apk
+          path: HomeKTV-debug.apk
+
+      # 打 v* 标签（如 git tag v1.2.0 && git push --tags）时，自动发一个带 APK 的 Release
+      - name: Release APK
+        if: startsWith(github.ref, 'refs/tags/v')
+        uses: softprops/action-gh-release@v2
+        with:
+          files: HomeKTV-debug.apk
+          generate_release_notes: true
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

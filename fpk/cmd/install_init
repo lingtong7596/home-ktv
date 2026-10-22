@@ -1,0 +1,5 @@
+#!/bin/bash
+# 安装前执行（此时应用文件尚未解压，不能检查 target 内容）
+set -u
+echo "install_init: ok"
+exit 0

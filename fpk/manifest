@@ -1,0 +1,17 @@
+appname               = ktv
+version               = 1.2.0
+display_name          = 家庭KTV
+desc                  = 家庭 KTV 点歌系统。<br /><strong>投影仪</strong>全屏播放双音轨 KTV 视频，支持原唱 / 伴唱瞬时切换、自动连播、屏幕显示点歌二维码；<strong>手机</strong>微信扫码即可点歌、删歌、置顶、切歌；<strong>NAS</strong> 负责曲库索引与文件服务，不转码、CPU 占用极低。<br />安装后在浏览器打开 <code>http://NAS地址:9188/admin</code> 配置曲库目录并扫描，投影仪安装 KTV Player 后填入同一地址即可使用。
+changelog             = 1.1.0 大版本更新：<br />· 后台：批量勾选（收藏/加入已点/停用/移除）、收藏夹管理、移除管理口令<br />· 投影仪：遥控器全面重做（OK暂停、左右重唱切歌、长按快进快退、MENU已点、↑切原唱伴唱、↓菜单）<br />· 全端：已点歌曲变色、置顶/打乱、原唱伴唱状态延续、点歌即后台预热<br />· 修复：网页暂停两秒自动续播、收藏状态不同步、已点侧栏关不掉<br />· 曲库防护：网盘目录偶发读取失败不再误清空曲库
+platform              = x86
+source                = thirdparty
+maintainer            = 家庭KTV
+maintainer_url        = https://github.com/
+distributor           = 家庭KTV
+distributor_url       = https://github.com/
+os_min_version        = 1.0.0
+service_port          = 9188
+checkport             = true
+ctl_stop              = true
+desktop_uidir         = ui
+desktop_applaunchname = ktv.Application

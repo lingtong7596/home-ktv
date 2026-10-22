@@ -1,0 +1,50 @@
+#!/bin/bash
+# 安装完成后：准备数据目录、写入初始配置、补齐可执行权限
+# 幂等：重复执行不覆盖用户已有配置
+
+set -u
+
+APPNAME="${TRIM_APPNAME:-ktv}"
+APPDEST="${TRIM_APPDEST:-/var/apps/${APPNAME}/target}"
+PKGVAR="${TRIM_PKGVAR:-/var/apps/${APPNAME}/var}"
+PKGHOME="${TRIM_PKGHOME:-/var/apps/${APPNAME}/home}"
+
+MEDIA_PATH="/vol1/1000/ktv歌库"
+
+mkdir -p "${PKGVAR}/cache" "${PKGHOME}" 2>/dev/null || true
+
+# 二进制执行权限（Windows 上打的包不带 exec 位）
+chmod +x "${APPDEST}/node/bin/node" 2>/dev/null || true
+chmod +x "${APPDEST}"/ffmpeg/ffmpeg "${APPDEST}"/ffmpeg/ffprobe 2>/dev/null || true
+chmod +x "${APPDEST}"/../cmd/* 2>/dev/null || true
+
+CFG="${PKGVAR}/config.json"
+if [ -f "${CFG}" ]; then
+  echo "existing config kept: ${CFG}"
+else
+  cat > "${CFG}" <<JSON
+{
+  "port": 9188,
+  "host": "0.0.0.0",
+  "roomName": "客厅",
+  "mediaDirs": ["${MEDIA_PATH}"],
+  "cacheMaxGB": 20,
+  "probeConcurrency": 3,
+  "probeTimeout": 60000,
+  "originalTrack": 0,
+  "accompanimentTrack": 1,
+  "autoScanOnStart": true,
+  "adminPin": ""
+}
+JSON
+  echo "default config written: ${CFG}"
+fi
+
+if [ -d "${MEDIA_PATH}" ]; then
+  echo "media dir ok: ${MEDIA_PATH}"
+else
+  echo "WARN: media dir not found: ${MEDIA_PATH} (可在后台管理页修改)"
+fi
+
+echo "install_callback done"
+exit 0

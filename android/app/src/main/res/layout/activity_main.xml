@@ -1,0 +1,509 @@
+<?xml version="1.0" encoding="utf-8"?>
+<FrameLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:id="@+id/root"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:background="#000000">
+
+    <!-- 视频画面（禁用系统自带控制器：OK 键不再弹出中央播放圆盘和压暗遮罩） -->
+    <androidx.media3.ui.PlayerView
+        android:id="@+id/playerView"
+        android:layout_width="match_parent"
+        android:layout_height="match_parent"
+        android:keepScreenOn="true"
+        app:use_controller="false"
+        xmlns:app="http://schemas.android.com/apk/res-auto" />
+
+    <!-- 待机页：二维码 + 提示 -->
+    <LinearLayout
+        android:id="@+id/idleView"
+        android:layout_width="match_parent"
+        android:layout_height="match_parent"
+        android:background="#07080d"
+        android:gravity="center"
+        android:orientation="horizontal"
+        android:padding="48dp">
+
+        <LinearLayout
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_weight="1"
+            android:orientation="vertical">
+
+            <TextView
+                android:id="@+id/idleRoom"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="LIVING ROOM"
+                android:textColor="#ffb347"
+                android:textSize="14sp"
+                android:letterSpacing="0.4" />
+
+            <TextView
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="家庭 KTV"
+                android:textColor="#ffffff"
+                android:textSize="64sp"
+                android:textStyle="bold"
+                android:layout_marginTop="12dp" />
+
+            <TextView
+                android:id="@+id/idleTips"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="20dp"
+                android:lineSpacingExtra="8dp"
+                android:text="① 手机微信扫一扫右侧二维码\n② 遥控器：返回=点歌台  OK=播放/暂停\n③ 双击左右=重唱/切歌  长按左右=快退/快进\n④ ↑切原唱伴唱  ↓出菜单  功能键=已点列表"
+                android:textColor="#9aa3b5"
+                android:textSize="17sp" />
+
+            <LinearLayout
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:orientation="horizontal"
+                android:layout_marginTop="26dp">
+
+                <Button
+                    android:id="@+id/btnOpenBrowser"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:text="🎵 打开点歌台"
+                    android:textSize="16sp" />
+
+                <Button
+                    android:id="@+id/btnSettings"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:layout_marginLeft="16dp"
+                    android:text="⚙ 设置"
+                    android:textSize="16sp" />
+            </LinearLayout>
+        </LinearLayout>
+
+        <LinearLayout
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:gravity="center"
+            android:orientation="vertical">
+
+            <ImageView
+                android:id="@+id/qrBig"
+                android:layout_width="320dp"
+                android:layout_height="320dp"
+                android:background="#ffffff"
+                android:padding="16dp"
+                android:contentDescription="点歌二维码" />
+
+            <TextView
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="12dp"
+                android:text="扫码点歌"
+                android:textColor="#111111"
+                android:background="#ffffff"
+                android:paddingLeft="20dp"
+                android:paddingRight="20dp"
+                android:paddingTop="6dp"
+                android:paddingBottom="6dp"
+                android:textSize="14sp" />
+        </LinearLayout>
+    </LinearLayout>
+
+    <!-- 点歌台：左列表 / 中字母索引 / 右二维码+快捷键，底部大类（半透明，能透出正在唱的画面） -->
+    <LinearLayout
+        android:id="@+id/browserPanel"
+        android:layout_width="match_parent"
+        android:layout_height="match_parent"
+        android:background="#d907080d"
+        android:orientation="vertical"
+        android:visibility="gone">
+
+        <!-- 顶栏：标题 + 关闭 -->
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="horizontal"
+            android:gravity="center_vertical"
+            android:paddingLeft="18dp"
+            android:paddingRight="18dp"
+            android:paddingTop="10dp"
+            android:paddingBottom="6dp">
+
+            <TextView
+                android:id="@+id/browserTitle"
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_weight="1"
+                android:text="点歌台 · 歌名"
+                android:textColor="#ffffff"
+                android:textSize="22sp"
+                android:textStyle="bold" />
+
+            <TextView
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_marginRight="14dp"
+                android:text="功能键=切大类  返回=播放页"
+                android:textColor="#6b7385"
+                android:textSize="12sp" />
+
+            <Button
+                android:id="@+id/btnBrowserClose"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="✕ 关闭" />
+        </LinearLayout>
+
+        <!-- 中部三栏 -->
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="0dp"
+            android:layout_weight="1"
+            android:orientation="horizontal">
+
+            <!-- 左：歌曲 / 歌手列表 -->
+            <ScrollView
+                android:id="@+id/browserScroll"
+                android:layout_width="0dp"
+                android:layout_height="match_parent"
+                android:layout_weight="57"
+                android:scrollbars="none">
+
+                <LinearLayout
+                    android:id="@+id/listContainer"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:orientation="vertical"
+                    android:paddingLeft="14dp"
+                    android:paddingTop="4dp"
+                    android:paddingRight="10dp"
+                    android:paddingBottom="10dp" />
+            </ScrollView>
+
+            <!-- 中：字母 / 数字索引（大按钮网格，每行 5 个） -->
+            <LinearLayout
+                android:layout_width="0dp"
+                android:layout_height="match_parent"
+                android:layout_weight="21"
+                android:orientation="vertical"
+                android:background="#12000000"
+                android:paddingLeft="8dp"
+                android:paddingRight="8dp"
+                android:paddingTop="6dp">
+
+                <TextView
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:text="按首字母"
+                    android:textColor="#6b7385"
+                    android:textSize="12sp"
+                    android:layout_marginBottom="4dp" />
+
+                <LinearLayout
+                    android:id="@+id/lettersGrid"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:orientation="vertical" />
+            </LinearLayout>
+
+            <!-- 右：点歌二维码 + 快捷键说明 -->
+            <LinearLayout
+                android:layout_width="0dp"
+                android:layout_height="match_parent"
+                android:layout_weight="22"
+                android:orientation="vertical"
+                android:gravity="center_horizontal"
+                android:paddingLeft="6dp"
+                android:paddingRight="10dp"
+                android:paddingTop="6dp">
+
+                <ImageView
+                    android:id="@+id/qrSide"
+                    android:layout_width="128dp"
+                    android:layout_height="128dp"
+                    android:background="#ffffff"
+                    android:padding="7dp"
+                    android:contentDescription="点歌二维码" />
+
+                <TextView
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="4dp"
+                    android:text="手机扫码点歌"
+                    android:textColor="#8f97a8"
+                    android:textSize="12sp" />
+
+                <TextView
+                    android:id="@+id/keyHelp"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="10dp"
+                    android:lineSpacingExtra="6dp"
+                    android:textColor="#9aa3b5"
+                    android:textSize="12.5sp"
+                    android:text="OK　　暂停 / 播放\n←　　双击 重唱（长按快退×2）\n→　　双击 切歌（长按快进×2）\n↑　　原唱 / 伴唱\n↓　　操作菜单\n功能键　切换大类 / 已点\n返回　　回播放页（歌不停）" />
+            </LinearLayout>
+        </LinearLayout>
+
+        <!-- 底部大类栏：歌名 歌星 排行 收藏 已点 -->
+        <HorizontalScrollView
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:scrollbars="none"
+            android:background="#22101420"
+            android:paddingLeft="14dp"
+            android:paddingTop="8dp"
+            android:paddingRight="14dp"
+            android:paddingBottom="10dp">
+
+            <LinearLayout
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:orientation="horizontal"
+                android:gravity="center_vertical">
+
+                <LinearLayout
+                    android:id="@+id/tabRow"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:orientation="horizontal" />
+
+                <TextView
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:layout_marginLeft="14dp"
+                    android:layout_marginRight="14dp"
+                    android:text="｜"
+                    android:textColor="#3a3f52"
+                    android:textSize="18sp" />
+
+                <LinearLayout
+                    android:id="@+id/chipsRow"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:orientation="horizontal" />
+            </LinearLayout>
+        </HorizontalScrollView>
+    </LinearLayout>
+
+    <!-- 顶部：当前歌曲信息（仅播放页显示，进点歌台自动隐藏，避免重叠） -->
+    <LinearLayout
+        android:id="@+id/topBar"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_gravity="top"
+        android:orientation="vertical"
+        android:padding="24dp">
+
+        <TextView
+            android:id="@+id/nowTitle"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:textColor="#ffffff"
+            android:textSize="30sp"
+            android:textStyle="bold"
+            android:shadowColor="#80000000"
+            android:shadowRadius="8" />
+
+        <LinearLayout
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:orientation="horizontal"
+            android:layout_marginTop="6dp"
+            android:gravity="center_vertical">
+
+            <TextView
+                android:id="@+id/nowArtist"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:textColor="#c8cedb"
+                android:textSize="16sp"
+                android:shadowColor="#80000000"
+                android:shadowRadius="8" />
+
+            <TextView
+                android:id="@+id/trackBadge"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_marginLeft="14dp"
+                android:background="#ff4d6d"
+                android:paddingLeft="12dp"
+                android:paddingRight="12dp"
+                android:paddingTop="3dp"
+                android:paddingBottom="3dp"
+                android:text="原唱"
+                android:textColor="#ffffff"
+                android:textSize="13sp" />
+
+            <TextView
+                android:id="@+id/queueBadge"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_marginLeft="10dp"
+                android:text="已点 0 首"
+                android:textColor="#c8cedb"
+                android:textSize="13sp"
+                android:shadowColor="#80000000"
+                android:shadowRadius="8" />
+        </LinearLayout>
+    </LinearLayout>
+
+    <!-- 已点队列（播放页按功能键开关） -->
+    <LinearLayout
+        android:id="@+id/queuePanel"
+        android:layout_width="360dp"
+        android:layout_height="match_parent"
+        android:layout_gravity="end"
+        android:background="#f2101218"
+        android:orientation="vertical"
+        android:visibility="gone">
+
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:gravity="center_vertical"
+            android:orientation="horizontal"
+            android:padding="16dp">
+
+            <TextView
+                android:id="@+id/queueTitle"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="已点歌曲"
+                android:textColor="#ffffff"
+                android:textSize="17sp"
+                android:textStyle="bold" />
+
+            <View
+                android:layout_width="0dp"
+                android:layout_height="1dp"
+                android:layout_weight="1" />
+
+            <Button
+                android:id="@+id/btnQShuffle"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="🔀"
+                android:textSize="13sp" />
+
+            <Button
+                android:id="@+id/btnQClear"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_marginLeft="6dp"
+                android:text="清空"
+                android:textSize="13sp" />
+        </LinearLayout>
+
+        <ScrollView
+            android:layout_width="match_parent"
+            android:layout_height="0dp"
+            android:layout_weight="1">
+
+            <LinearLayout
+                android:id="@+id/queueList"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:orientation="vertical"
+                android:paddingLeft="14dp"
+                android:paddingRight="14dp"
+                android:paddingBottom="16dp" />
+        </ScrollView>
+    </LinearLayout>
+
+    <!-- 方向下键弹出的操作菜单（播放页唯一的一组控制按钮，只在按键时出现） -->
+    <HorizontalScrollView
+        android:id="@+id/actionMenu"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_gravity="bottom"
+        android:layout_marginBottom="24dp"
+        android:background="#f21a1d28"
+        android:padding="10dp"
+        android:scrollbars="none"
+        android:visibility="gone">
+
+        <LinearLayout
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:orientation="horizontal">
+
+            <Button
+                android:id="@+id/amPause"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="⏸ 暂停"
+                android:textSize="14sp" />
+
+            <Button
+                android:id="@+id/amNext"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_marginLeft="8dp"
+                android:text="⏭ 切歌"
+                android:textSize="14sp" />
+
+            <Button
+                android:id="@+id/amReplay"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_marginLeft="8dp"
+                android:text="↻ 重唱"
+                android:textSize="14sp" />
+
+            <Button
+                android:id="@+id/amTrack"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_marginLeft="8dp"
+                android:text="🎤 原唱"
+                android:textSize="14sp" />
+
+            <Button
+                android:id="@+id/amRewind"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_marginLeft="8dp"
+                android:text="⏪ 快退"
+                android:textSize="14sp" />
+
+            <Button
+                android:id="@+id/amForward"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_marginLeft="8dp"
+                android:text="⏩ 快进"
+                android:textSize="14sp" />
+
+            <Button
+                android:id="@+id/amFav"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_marginLeft="8dp"
+                android:text="♡ 收藏"
+                android:textSize="14sp" />
+
+            <Button
+                android:id="@+id/amSongs"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_marginLeft="8dp"
+                android:text="🎵 点歌台"
+                android:textSize="14sp" />
+        </LinearLayout>
+    </HorizontalScrollView>
+
+    <!-- 准备中提示 -->
+    <TextView
+        android:id="@+id/preparing"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_gravity="center"
+        android:background="#e6000000"
+        android:padding="24dp"
+        android:text="正在连接播放器…"
+        android:textColor="#ffffff"
+        android:textSize="18sp"
+        android:visibility="gone" />
+</FrameLayout>

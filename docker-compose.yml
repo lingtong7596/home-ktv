@@ -1,0 +1,10 @@
+services:
+  ktv:
+    build: .
+    container_name: home-ktv
+    restart: always
+    ports:
+      - "8080:8080"
+    volumes:
+      - ./server:/app                # 配置 / 数据 / 缓存都落在这里，升级不丢
+      - /vol1/1000/KTV:/media:ro     # ★ 改成你 NAS 上 KTV 视频目录

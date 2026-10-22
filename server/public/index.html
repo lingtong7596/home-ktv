@@ -1,0 +1,60 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>家庭 KTV</title>
+<style>
+  :root { --bg:#07080d; --text:#f2f4f8; --muted:#9aa3b5; --brand:#ff4d6d; --brand2:#ffb347; }
+  * { box-sizing: border-box; }
+  body { margin:0; min-height:100vh; background:radial-gradient(900px 600px at 15% 10%,#1a1030,#07080d 65%);
+    color:var(--text); font-family:-apple-system,"PingFang SC","Microsoft YaHei",system-ui,sans-serif;
+    display:flex; align-items:center; justify-content:center; padding:32px; }
+  .box { width:100%; max-width:720px; }
+  .room { letter-spacing:.4em; color:var(--brand2); font-size:12px; text-transform:uppercase; }
+  h1 { font-size:44px; margin:10px 0 6px; font-weight:800;
+    background:linear-gradient(100deg,#fff 20%,var(--brand) 65%,var(--brand2));
+    -webkit-background-clip:text; background-clip:text; color:transparent; }
+  p { color:var(--muted); font-size:14px; line-height:1.9; margin:0 0 26px; }
+  .grid { display:grid; gap:14px; grid-template-columns:repeat(auto-fit,minmax(210px,1fr)); }
+  a.card { display:block; text-decoration:none; color:var(--text); background:rgba(255,255,255,.045);
+    border:1px solid rgba(255,255,255,.1); border-radius:16px; padding:20px; transition:.2s; }
+  a.card:hover { transform:translateY(-2px); border-color:rgba(255,77,109,.45); background:rgba(255,255,255,.08); }
+  a.card .ic { font-size:24px; }
+  a.card .t { font-size:16px; font-weight:700; margin:10px 0 6px; }
+  a.card .d { font-size:12px; color:var(--muted); line-height:1.7; }
+  .foot { margin-top:26px; font-size:12px; color:#5d6576; }
+</style>
+</head>
+<body>
+<div class="box">
+  <div class="room" id="room">HOME KTV</div>
+  <h1>家庭 KTV</h1>
+  <p>NAS 做曲库、投影仪唱歌、手机扫码点歌。<br>三个入口在同一个局域网内直接访问即可。</p>
+  <div class="grid">
+    <a class="card" href="/play/">
+      <div class="ic">📺</div>
+      <div class="t">投影仪播放页</div>
+      <div class="d">投影仪浏览器打开后全屏，自动连播、显示点歌二维码、可切原唱/伴唱</div>
+    </a>
+    <a class="card" href="/m/">
+      <div class="ic">📱</div>
+      <div class="t">手机点歌台</div>
+      <div class="d">扫码即用，拼音首字母搜歌、点歌、置顶、删歌、切歌</div>
+    </a>
+    <a class="card" href="/admin/">
+      <div class="ic">⚙️</div>
+      <div class="t">后台管理</div>
+      <div class="d">扫描曲库、配置目录、音轨映射、清理转码缓存</div>
+    </a>
+  </div>
+  <div class="foot">Powered by 家庭 KTV Server · <span id="ver">—</span></div>
+</div>
+<script>
+fetch('/api/health').then(r=>r.json()).then(h=>{
+  document.getElementById('room').textContent=(h.room||'HOME')+' KTV';
+  document.getElementById('ver').textContent='v'+h.version+' · 曲库 '+h.library.total+' 首';
+}).catch(()=>{});
+</script>
+</body>
+</html>

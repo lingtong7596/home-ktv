@@ -1,0 +1,16 @@
+#!/bin/bash
+# 卸载后：默认保留用户数据（曲库索引、点唱记录、配置）
+# 只有显式选择删除数据（wizard_delete_data=true）时才清理
+set -u
+
+PKGVAR="${TRIM_PKGVAR:-/var/apps/${TRIM_APPNAME:-ktv}/var}"
+
+if [ "${wizard_delete_data:-false}" = "true" ]; then
+  echo "removing app data: ${PKGVAR}"
+  rm -rf "${PKGVAR:?}/cache" "${PKGVAR:?}/ktv.db" "${PKGVAR:?}/config.json" 2>/dev/null || true
+else
+  echo "user data kept: ${PKGVAR}"
+fi
+
+echo "uninstall_callback done"
+exit 0

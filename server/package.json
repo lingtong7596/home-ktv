@@ -1,0 +1,14 @@
+{
+  "name": "home-ktv-server",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "description": "家庭 KTV 服务端：曲库扫描 / 点歌 API / 音轨切换 / 视频推流（零第三方依赖）",
+  "engines": {
+    "node": ">=18"
+  },
+  "scripts": {
+    "start": "node server.js",
+    "scan": "node -e \"import('./src/scanner.js').then(async(m)=>{const {loadConfig}=await import('./src/config.js');const cfg=loadConfig();const lib=await m.scanLibrary(cfg,{onProgress:p=>console.log(p.message)});console.log('done',lib.songs.length);})\""
+  }
+}

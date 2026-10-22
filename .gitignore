@@ -1,0 +1,29 @@
+# ---- 依赖与运行产物 ----
+node_modules/
+server/cache/
+server/data/
+server/config.json
+server/server.log
+*.log
+
+# ---- 大体积二进制（构建时用 fetch-runtime.mjs 下载）----
+fpk/*.fpk
+fpk/runtime/
+fpk/_dl/
+
+# ---- 编译产物 ----
+apk/*.apk
+android/app/build/
+android/.gradle/
+android/build/
+.gradle/
+local.properties
+
+# ---- 测试素材（自备片源，不入库）----
+test-media/
+
+# ---- 截图与其他 ----
+shots/
+.DS_Store
+Thumbs.db
+miniprogram/

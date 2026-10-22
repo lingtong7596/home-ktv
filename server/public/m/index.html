@@ -1,0 +1,693 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, viewport-fit=cover" />
+<title>家庭KTV 点歌台</title>
+<style>
+  :root {
+    --bg: #0d0e14; --card: #171923; --card2: #1f2230; --line: rgba(255,255,255,.08);
+    --txt: #eef1f7; --mut: #8f97a8; --acc: #ff4d6d; --ok: #37d67a; --gold: #ffb347;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; -webkit-tap-highlight-color: transparent; }
+  body { background: var(--bg); color: var(--txt); font: 14px/1.5 -apple-system, "PingFang SC", "Microsoft YaHei", sans-serif; padding-bottom: 62px; }
+  button { font-family: inherit; }
+
+  /* ---------- 顶栏：正在播放 ---------- */
+  #topbar {
+    position: sticky; top: 0; z-index: 20; background: linear-gradient(160deg, #1b1d2a, #12141d);
+    border-bottom: 1px solid var(--line); padding: 10px 14px 8px;
+  }
+  #topbar .room { font-size: 12px; color: var(--mut); display: flex; justify-content: space-between; }
+  #topbar .now { display: flex; align-items: center; gap: 10px; margin-top: 4px; min-height: 30px; }
+  #topbar .now .t { flex: 1; min-width: 0; }
+  #topbar .now .title { font-weight: 700; font-size: 15px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  #topbar .now .artist { font-size: 12px; color: var(--mut); }
+  #progress { height: 3px; background: var(--line); border-radius: 2px; margin-top: 6px; overflow: hidden; }
+  #progress > i { display: block; height: 100%; width: 0; background: linear-gradient(90deg, var(--acc), var(--gold)); }
+  .ctl {
+    border: 1px solid var(--line); background: var(--card2); color: var(--txt); border-radius: 18px;
+    padding: 5px 12px; font-size: 12px;
+  }
+  .ctl.pri { background: var(--acc); border-color: var(--acc); color: #fff; }
+  .heart { background: none; border: 0; font-size: 20px; color: var(--mut); cursor: pointer; line-height: 1; }
+  .heart.on { color: var(--acc); }
+
+  /* ---------- 主区 ---------- */
+  main { padding: 10px 12px; }
+  .searchbox { display: flex; gap: 8px; margin-bottom: 8px; }
+  .searchbox input {
+    flex: 1; background: var(--card); border: 1px solid var(--line); border-radius: 20px;
+    padding: 9px 16px; color: var(--txt); font-size: 14px; outline: none;
+  }
+  .chips { display: flex; gap: 6px; overflow-x: auto; padding: 4px 0; scrollbar-width: none; }
+  .chips::-webkit-scrollbar { display: none; }
+  .chip {
+    flex: 0 0 auto; border: 1px solid var(--line); background: var(--card); color: var(--mut);
+    border-radius: 14px; padding: 4px 12px; font-size: 12px; cursor: pointer;
+  }
+  .chip.on { background: var(--acc); border-color: var(--acc); color: #fff; }
+  .letters { display: flex; flex-wrap: wrap; gap: 4px; margin: 6px 0; }
+  .letters button {
+    min-width: 26px; height: 24px; border: 1px solid var(--line); background: var(--card);
+    color: var(--mut); border-radius: 6px; font-size: 11px; cursor: pointer;
+  }
+  .letters button.on { background: var(--acc); color: #fff; border-color: var(--acc); }
+
+  /* ---------- 列表 ---------- */
+  .song {
+    display: flex; align-items: center; gap: 10px; background: var(--card); border: 1px solid var(--line);
+    border-radius: 12px; padding: 9px 12px; margin-bottom: 8px;
+  }
+  .song .cover {
+    width: 42px; height: 42px; border-radius: 8px; flex: 0 0 auto; object-fit: cover; background: var(--card2);
+  }
+  .song .mid { flex: 1; min-width: 0; }
+  .song .t { font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .song .a { font-size: 12px; color: var(--mut); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .song .tags { display: flex; gap: 4px; margin-top: 2px; }
+  .tag { font-size: 10px; padding: 0 6px; border-radius: 8px; background: var(--card2); color: var(--mut); }
+  .tag.lang { background: rgba(55,214,122,.15); color: var(--ok); }
+  .tag.hot { background: rgba(255,179,71,.15); color: var(--gold); }
+  .song .ops { display: flex; align-items: center; gap: 6px; flex: 0 0 auto; }
+  .add {
+    border: 0; background: var(--acc); color: #fff; border-radius: 16px; padding: 6px 14px; font-size: 12px; cursor: pointer;
+  }
+  /* 已在已点列表（或正在唱）的歌：按钮变成明显的绿色勾，一眼看出点过了 */
+  .add.queued { background: rgba(55,214,122,.16); color: var(--ok); border: 1px solid rgba(55,214,122,.55); font-weight: 600; }
+  .add.now { background: rgba(255,179,71,.16); color: var(--gold); border: 1px solid rgba(255,179,71,.55); font-weight: 600; }
+  .iconbtn { background: none; border: 0; color: var(--mut); font-size: 16px; padding: 4px; cursor: pointer; }
+  .qitem .prep { font-size: 11px; color: var(--gold); margin-top: 2px; }
+  .qitem .prep i { display: inline-block; height: 3px; width: 46px; border-radius: 2px; background: rgba(255,255,255,.14); vertical-align: middle; margin-right: 5px; overflow: hidden; }
+  .qitem .prep i b { display: block; height: 100%; background: var(--gold); }
+  .footlink { text-align: center; color: #5d6576; font-size: 11px; padding: 18px 0 8px; }
+  .footlink a { color: #6f7a8d; text-decoration: none; border-bottom: 1px dotted #3a4050; }
+
+  .artist-row { display: flex; align-items: center; gap: 12px; background: var(--card); border: 1px solid var(--line); border-radius: 12px; padding: 8px 12px; margin-bottom: 8px; cursor: pointer; }
+  .artist-row img { width: 44px; height: 44px; border-radius: 50%; object-fit: cover; background: var(--card2); }
+  .artist-row .n { font-weight: 600; }
+  .artist-row .m { font-size: 12px; color: var(--mut); }
+
+  .empty { text-align: center; color: var(--mut); padding: 46px 20px; font-size: 13px; line-height: 2; }
+  .more { display: block; width: 100%; border: 1px solid var(--line); background: var(--card); color: var(--mut); border-radius: 10px; padding: 9px; margin: 4px 0 12px; cursor: pointer; }
+
+  /* ---------- 队列 ---------- */
+  .nowcard { background: linear-gradient(140deg, #2a1e2a, #1b1d2a); border: 1px solid var(--line); border-radius: 14px; padding: 14px; margin-bottom: 12px; }
+  .nowcard .lbl { font-size: 11px; color: var(--acc); letter-spacing: 2px; }
+  .nowcard .t { font-size: 18px; font-weight: 800; margin: 4px 0 2px; }
+  .nowcard .a { color: var(--mut); font-size: 13px; }
+  .nowcard .ops { display: flex; gap: 8px; margin-top: 12px; flex-wrap: wrap; }
+  .qitem { display: flex; align-items: center; gap: 10px; background: var(--card); border: 1px solid var(--line); border-radius: 12px; padding: 9px 12px; margin-bottom: 8px; }
+  .qitem .idx { width: 22px; height: 22px; border-radius: 50%; background: var(--card2); color: var(--gold); font-size: 12px; display: flex; align-items: center; justify-content: center; flex: 0 0 auto; }
+  .qitem .mid { flex: 1; min-width: 0; }
+
+  /* ---------- 底部 Tab ---------- */
+  #tabs {
+    position: fixed; bottom: 0; left: 0; right: 0; z-index: 30; display: flex;
+    background: rgba(18,20,29,.96); border-top: 1px solid var(--line); backdrop-filter: blur(8px);
+    padding-bottom: env(safe-area-inset-bottom);
+  }
+  #tabs button {
+    flex: 1; border: 0; background: none; color: var(--mut); font-size: 11px; padding: 9px 0 7px; cursor: pointer; position: relative;
+  }
+  #tabs button .ic { font-size: 19px; display: block; }
+  #tabs button.on { color: var(--acc); }
+  #tabs .badge {
+    position: absolute; top: 4px; right: calc(50% - 24px); background: var(--acc); color: #fff;
+    border-radius: 9px; font-size: 10px; padding: 0 5px; min-width: 16px; height: 16px; line-height: 16px;
+  }
+  .toast { position: fixed; left: 50%; bottom: 76px; transform: translateX(-50%); background: #2a2d3a; color: #fff; padding: 8px 18px; border-radius: 18px; font-size: 13px; opacity: 0; transition: .25s; pointer-events: none; z-index: 99; }
+  .toast.show { opacity: .96; }
+  .subhead { display: flex; align-items: center; gap: 8px; margin: 8px 0; }
+  .subhead b { font-size: 15px; }
+  .subhead .back { color: var(--acc); background: none; border: 0; font-size: 13px; cursor: pointer; }
+</style>
+</head>
+<body>
+  <div id="topbar">
+    <div class="room"><span id="roomName">家庭KTV</span><span id="conn">● 连接中…</span></div>
+    <div class="now">
+      <div class="t">
+        <div class="title" id="npTitle">暂无歌曲在唱</div>
+        <div class="artist" id="npArtist">点一首歌开始吧</div>
+      </div>
+      <button class="heart" id="npFav" style="display:none">♥</button>
+      <button class="ctl" id="npTrack" style="display:none">伴唱</button>
+      <button class="ctl pri" id="npNext" style="display:none">切歌</button>
+    </div>
+    <div id="progress"><i></i></div>
+  </div>
+
+  <main>
+    <!-- ========== 点歌 ========== -->
+    <section id="view-sing">
+      <div class="searchbox"><input id="q" placeholder="歌名关键词 / 歌名拼音首字母，如 qt" enterkeyhint="search" /></div>
+      <div class="chips" id="sortChips">
+        <button class="chip on" data-sort="default">默认</button>
+        <button class="chip" data-sort="hot">热门</button>
+        <button class="chip" data-sort="new">新歌</button>
+        <button class="chip" data-act="random">🎲 随机来一首</button>
+      </div>
+      <div class="chips" id="langChips"><button class="chip on" data-lang="">全部语种</button></div>
+      <div class="chips" id="typeChips"><button class="chip on" data-type="">全部类型</button></div>
+      <div id="songList"></div>
+      <button class="more" id="moreSongs" style="display:none">加载更多</button>
+    </section>
+
+    <!-- ========== 歌星 ========== -->
+    <section id="view-artists" style="display:none">
+      <div class="searchbox"><input id="aq" placeholder="歌手关键词 / 拼音首字母，如 zjl" enterkeyhint="search" /></div>
+      <div class="chips" id="regionChips">
+        <button class="chip on" data-region="">全部</button>
+        <button class="chip" data-region="大陆">大陆</button><button class="chip" data-region="台湾">台湾</button>
+        <button class="chip" data-region="香港">香港</button><button class="chip" data-region="外国">外国</button>
+      </div>
+      <div class="chips" id="genderChips">
+        <button class="chip on" data-gender="">全部</button>
+        <button class="chip" data-gender="男">男歌手</button><button class="chip" data-gender="女">女歌手</button>
+        <button class="chip" data-gender="组合">组合/乐队</button>
+      </div>
+      <div class="subhead" id="artistHead" style="display:none">
+        <button class="back" id="artistBack">‹ 返回歌星列表</button>
+      </div>
+      <div id="artistList"></div>
+      <button class="more" id="moreArtists" style="display:none">加载更多</button>
+    </section>
+
+    <!-- ========== 预览（投影仪正在播的画面） ========== -->
+    <section id="view-preview" style="display:none">
+      <div class="subhead"><b>📺 正在播放</b>
+        <button class="ctl" id="pvFull" style="margin-left:auto">⛶ 全屏横屏</button>
+      </div>
+      <div id="previewBox"></div>
+      <p class="hint" style="margin-top:8px">实时画面来自投影仪。轻点画面或点「全屏横屏」可全屏观看；mpg 片源手机解不了，只能去投影仪看。</p>
+    </section>
+
+    <!-- ========== 收藏 ========== -->
+    <section id="view-favs" style="display:none">
+      <div class="searchbox"><input id="favQ" placeholder="筛选收藏：歌名 / 歌手 / 拼音首字母" enterkeyhint="search" /></div>
+      <div class="subhead">
+        <b>❤️ 我的收藏</b>
+        <button class="ctl" id="favAll" style="margin-left:auto">全部点唱</button>
+        <button class="ctl" id="favShuffle">🔀 打乱</button>
+        <button class="ctl" id="favRandom">随机唱一首</button>
+      </div>
+      <div id="favList"></div>
+    </section>
+
+    <!-- ========== 已点 ========== -->
+    <section id="view-queue" style="display:none">
+      <div id="nowCardWrap"></div>
+      <div class="searchbox"><input id="qQ" placeholder="筛选已点：歌名 / 歌手" enterkeyhint="search" /></div>
+      <div class="subhead"><b>已点列表</b>
+        <button class="ctl" id="qShuffle" style="margin-left:auto">🔀 打乱</button>
+        <button class="ctl" id="qClear">清空</button>
+      </div>
+      <div id="queueList"></div>
+    </section>
+  </main>
+
+  <div class="footlink">服务地址 <a id="homeLink" href="/">—</a> · <a href="/admin/">后台管理</a> · <a href="/play/">投影仪页</a></div>
+
+  <div id="tabs">
+    <button data-tab="sing" class="on"><span class="ic">🎵</span>歌名</button>
+    <button data-tab="artists"><span class="ic">👤</span>歌星</button>
+    <button data-tab="preview"><span class="ic">📺</span>预览</button>
+    <button data-tab="favs"><span class="ic">❤️</span>收藏</button>
+    <button data-tab="queue"><span class="ic">📃</span>已点<span class="badge" id="qBadge" style="display:none">0</span></button>
+  </div>
+
+  <div class="toast" id="toast"></div>
+
+<script>
+/* ================ 状态 ================ */
+let state = { current: null, queue: [], favIds: [] };
+let me = localStorage.getItem('ktv.name') || '';
+const LANGS = new Set();
+const TYPES = new Set();
+
+const $ = (s) => document.querySelector(s);
+const esc = (t) => String(t ?? '').replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
+const isFav = (id) => state.favIds.includes(id);
+
+function toast(text) {
+  const el = $('#toast');
+  el.textContent = text;
+  el.classList.add('show');
+  clearTimeout(el._t);
+  el._t = setTimeout(() => el.classList.remove('show'), 2000);
+}
+
+async function api(path, opts) {
+  const r = await fetch(path, opts);
+  const d = await r.json().catch(() => ({}));
+  if (!r.ok) throw new Error(d.error || r.statusText);
+  return d;
+}
+
+/* ================ Tab ================ */
+document.querySelectorAll('#tabs button').forEach((btn) => {
+  btn.onclick = () => {
+    document.querySelectorAll('#tabs button').forEach((b) => b.classList.toggle('on', b === btn));
+    ['sing', 'artists', 'preview', 'favs', 'queue'].forEach((t) => { $('#view-' + t).style.display = btn.dataset.tab === t ? '' : 'none'; });
+    if (btn.dataset.tab === 'favs') loadFavs();
+    if (btn.dataset.tab === 'queue') renderQueue();
+    if (btn.dataset.tab === 'preview') loadPreview();
+    if (btn.dataset.tab === 'artists' && !artistView.name) loadArtists(true);
+  };
+});
+
+/* ================ 实时同步 ================ */
+function connect() {
+  const es = new EventSource('/api/events?role=phone');
+  es.addEventListener('state', (e) => {
+    state = JSON.parse(e.data);
+    renderTop();
+    renderQueue();
+    updateHearts();
+    refreshSongButtons();
+    if ($('#view-preview').style.display !== 'none') loadPreview();
+  });
+  es.addEventListener('toast', (e) => { const d = JSON.parse(e.data); if (d.by && d.by !== me) toast(d.text || ''); });
+  es.onerror = () => { $('#conn').textContent = '● 重连中…'; };
+}
+
+function renderTop() {
+  $('#conn').textContent = '● 已连接';
+  $('#roomName').textContent = (state.room || '家庭') + 'KTV · ' + (me || '游客');
+  const cur = state.current;
+  $('#npTitle').textContent = cur ? cur.song.title : '暂无歌曲在唱';
+  $('#npArtist').textContent = cur ? cur.song.artist : '点一首歌开始吧';
+  $('#npNext').style.display = cur ? '' : 'none';
+  $('#npFav').style.display = cur ? '' : 'none';
+  $('#npFav').classList.toggle('on', cur ? isFav(cur.song.id) : false);
+  const tc = $('#npTrack');
+  if (cur && cur.trackCount > 1) {
+    tc.style.display = '';
+    tc.textContent = cur.trackRole === 'acc' ? '切原唱' : '切伴唱';
+  } else tc.style.display = 'none';
+  if (cur && cur.duration) {
+    const pos = Math.min(cur.position || 0, cur.duration);
+    $('#progress > i').style.width = ((pos / cur.duration) * 100).toFixed(1) + '%';
+  } else $('#progress > i').style.width = '0';
+  $('#qBadge').textContent = state.queue.length;
+  $('#qBadge').style.display = state.queue.length ? '' : 'none';
+}
+
+function updateHearts() {
+  document.querySelectorAll('.heart[data-id]').forEach((h) => h.classList.toggle('on', isFav(h.dataset.id)));
+  if (state.current) $('#npFav').classList.toggle('on', isFav(state.current.song.id));
+}
+
+$('#npNext').onclick = () => api('/api/player/next', { method: 'POST' }).then(() => toast('已切歌'));
+$('#npTrack').onclick = () => api('/api/player/toggle-track', { method: 'POST' });
+$('#npFav').onclick = async () => {
+  if (!state.current) return;
+  const r = await api('/api/favs/toggle', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ songId: state.current.song.id }) });
+  state.favIds = r.fav ? [state.current.song.id, ...state.favIds] : state.favIds.filter((x) => x !== state.current.song.id);
+  renderTop(); updateHearts();
+  toast(r.fav ? '已收藏 ❤️' : '已取消收藏');
+};
+
+/* ================ 点歌 Tab ================ */
+/* 歌名大类：只按歌名本身搜索（关键词 / 歌名拼音首字母），
+   歌手的拼音首字母不参与，避免搜 "zjl" 出来一片；歌手请用「歌星」大类 */
+let query = '', sort = 'default', lang = '', type = '';
+let songOffset = 0, songTotal = 0;
+
+function songRow(s) {
+  const queued = state.queue.filter((q) => q.song.id === s.id).length;
+  const isNow = !!(state.current && state.current.song.id === s.id);
+  const cls = queued ? ' queued' : isNow ? ' now' : '';
+  const label = queued ? '✓ 已点' + (queued > 1 ? queued : '') : isNow ? '● 演唱中' : '点歌';
+  return '<div class="song" data-id="' + s.id + '">' +
+    '<img class="cover" loading="lazy" src="/api/avatar-placeholder.svg?name=' + encodeURIComponent((s.artists && s.artists[0]) || s.artist) + '"/>' +
+    '<div class="mid"><div class="t">' + esc(s.title) + '</div><div class="a">' + esc(s.artist) + '</div>' +
+      '<div class="tags">' + (s.lang ? '<span class="tag lang">' + esc(s.lang) + '</span>' : '') +
+      (s.type ? '<span class="tag">' + esc(s.type) + '</span>' : '') +
+      (s.plays >= 3 ? '<span class="tag hot">🔥 唱过' + s.plays + '次</span>' : '') + '</div></div>' +
+    '<div class="ops">' +
+      '<button class="heart' + (isFav(s.id) ? ' on' : '') + '" data-id="' + s.id + '">♥</button>' +
+      '<button class="add' + cls + '" data-id="' + s.id + '">' + label + '</button>' +
+    '</div></div>';
+}
+
+/** 已点/正在唱的歌要立刻变色，不用等重新拉列表 */
+function refreshSongButtons() {
+  document.querySelectorAll('.song').forEach((row) => {
+    const id = row.dataset.id;
+    const btn = row.querySelector('.add');
+    if (!btn) return;
+    const queued = state.queue.filter((q) => q.song.id === id).length;
+    const isNow = !!(state.current && state.current.song.id === id);
+    btn.classList.toggle('queued', !!queued);
+    btn.classList.toggle('now', !queued && isNow);
+    btn.textContent = queued ? '✓ 已点' + (queued > 1 ? queued : '') : isNow ? '● 演唱中' : '点歌';
+  });
+}
+
+async function loadSongs(reset) {
+  if (reset) songOffset = 0;
+  const p = new URLSearchParams({ q: query, sort, lang, type, qscope: 'title', limit: 30, offset: songOffset });
+  const r = await api('/api/songs?' + p);
+  songTotal = r.total;
+  const box = $('#songList');
+  const html = r.items.map(songRow).join('');
+  if (reset) box.innerHTML = html; else box.insertAdjacentHTML('beforeend', html);
+  $('#moreSongs').style.display = songOffset + 30 < songTotal ? '' : 'none';
+  if (!r.total) box.innerHTML = '<div class="empty">' + (query || lang || type ? '没找到匹配的歌曲<br/>换个关键词试试；找歌手请用「歌星」大类' : '曲库还是空的<br/>请在 NAS 后台「批量导入」扫描曲库') + '</div>';
+}
+
+$('#songList').addEventListener('click', async (e) => {
+  const heart = e.target.closest('.heart');
+  if (heart) {
+    const r = await api('/api/favs/toggle', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ songId: heart.dataset.id }) });
+    state.favIds = r.fav ? [heart.dataset.id, ...state.favIds] : state.favIds.filter((x) => x !== heart.dataset.id);
+    heart.classList.toggle('on', r.fav);
+    toast(r.fav ? '已收藏 ❤️' : '已取消收藏');
+    return;
+  }
+  const add = e.target.closest('.add');
+  if (add) return order(add.dataset.id);
+});
+
+async function order(songId) {
+  try {
+    const r = await api('/api/queue', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ songId, by: me || '手机' }) });
+    if (r.started) toast('🎬 正在播放');
+    else toast('已加入第 ' + r.position + ' 位');
+    if (r.state) { state = r.state; renderTop(); renderQueue(); refreshSongButtons(); }
+  } catch (err) {
+    toast(err.message);
+  }
+}
+
+$('#q').addEventListener('input', (e) => { query = e.target.value.trim(); loadSongs(true); });
+$('#sortChips').addEventListener('click', (e) => {
+  const c = e.target.closest('.chip');
+  if (!c) return;
+  if (c.dataset.act === 'random') return randomOne();
+  sort = c.dataset.sort;
+  document.querySelectorAll('#sortChips .chip[data-sort]').forEach((x) => x.classList.toggle('on', x === c));
+  loadSongs(true);
+});
+$('#langChips').addEventListener('click', (e) => {
+  const c = e.target.closest('.chip'); if (!c) return;
+  lang = c.dataset.lang || c.textContent.replace(/（\d+）$/, '').replace('全部语种', '');
+  if (c.dataset.lang === '') lang = '';
+  document.querySelectorAll('#langChips .chip').forEach((x) => x.classList.toggle('on', x === c));
+  loadSongs(true);
+});
+$('#typeChips').addEventListener('click', (e) => {
+  const c = e.target.closest('.chip'); if (!c) return;
+  type = c.dataset.type || c.textContent.replace(/（\d+）$/, '').replace('全部类型', '');
+  if (c.dataset.type === '') type = '';
+  document.querySelectorAll('#typeChips .chip').forEach((x) => x.classList.toggle('on', x === c));
+  loadSongs(true);
+});
+$('#moreSongs').onclick = () => { songOffset += 30; loadSongs(false); };
+
+async function randomOne() {
+  const r = await api('/api/random?n=1');
+  if (!r.items.length) return toast('曲库为空');
+  order(r.items[0].id);
+}
+
+// 语种/类型 筛选条
+async function loadFacets() {
+  const r = await api('/api/facets');
+  $('#langChips').innerHTML = '<button class="chip on" data-lang="">全部语种</button>' +
+    (r.langs || []).map((x) => '<button class="chip" data-lang="' + esc(x.lang) + '">' + esc(x.lang) + ' ' + x.count + '</button>').join('');
+  $('#typeChips').innerHTML = '<button class="chip on" data-type="">全部类型</button>' +
+    (r.types || []).map((x) => '<button class="chip" data-type="' + esc(x.type) + '">' + esc(x.type) + ' ' + x.count + '</button>').join('');
+}
+
+// （手机端不放字母条：输入法打字更方便，搜索框直接支持中文 / 全拼 / 首字母）
+
+/* ================ 歌星 Tab ================ */
+const artistView = { name: '', letter: '', region: '', gender: '', offset: 0 };
+
+function artistRow(a) {
+  return '<div class="artist-row" data-name="' + esc(a.name) + '">' +
+    '<img loading="lazy" src="/api/artists/' + a.id + '/avatar?v=' + (a.hasAvatar ? 1 : 0) + '" onerror="this.onerror=null;this.src=\'/api/avatar-placeholder.svg?name=' + encodeURIComponent(a.name) + '\'"/>' +
+    '<div class="mid"><div class="n">' + esc(a.name) + '</div>' +
+    '<div class="m">' + [a.region, a.gender].filter(Boolean).join(' · ') + ' · ' + a.count + ' 首 · 唱过 ' + (a.plays || 0) + ' 次</div></div>' +
+    '<span class="tag">›</span></div>';
+}
+
+async function loadArtists(reset) {
+  if (reset) artistView.offset = 0;
+  const p = new URLSearchParams({ q: $('#aq').value.trim(), letter: artistView.letter, region: artistView.region, gender: artistView.gender, limit: 30, offset: artistView.offset });
+  const r = await api('/api/artists?' + p);
+  const box = $('#artistList');
+  const html = r.items.map(artistRow).join('');
+  if (reset) box.innerHTML = html; else box.insertAdjacentHTML('beforeend', html);
+  $('#moreArtists').style.display = artistView.offset + 30 < r.total ? '' : 'none';
+  if (!r.total && reset) box.innerHTML = '<div class="empty">没有找到歌手<br/>地区/性别可在 NAS 后台「歌手管理」里设置</div>';
+}
+
+async function showArtistSongs(name) {
+  artistView.name = name;
+  const r = await api('/api/songs?artist=' + encodeURIComponent(name) + '&limit=200');
+  $('#artistHead').style.display = '';
+  $('#artistList').innerHTML = '<div class="subhead" style="margin-top:2px"><b>' + esc(name) + '</b><span class="hint">' + r.total + ' 首</span></div>' +
+    (r.items.map(songRow).join('') || '<div class="empty">该歌手暂无歌曲</div>');
+  $('#moreArtists').style.display = 'none';
+  window.scrollTo(0, 0);
+}
+
+$('#artistList').addEventListener('click', (e) => {
+  const row = e.target.closest('.artist-row');
+  if (row) return showArtistSongs(row.dataset.name);
+  const heart = e.target.closest('.heart');
+  if (heart) {
+    return api('/api/favs/toggle', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ songId: heart.dataset.id }) }).then((r) => {
+      state.favIds = r.fav ? [heart.dataset.id, ...state.favIds] : state.favIds.filter((x) => x !== heart.dataset.id);
+      heart.classList.toggle('on', r.fav);
+      toast(r.fav ? '已收藏 ❤️' : '已取消收藏');
+    });
+  }
+  const add = e.target.closest('.add');
+  if (add) return order(add.dataset.id);
+});
+$('#artistBack').onclick = () => {
+  artistView.name = '';
+  $('#artistHead').style.display = 'none';
+  loadArtists(true);
+};
+$('#aq').addEventListener('input', () => { if (!artistView.name) loadArtists(true); });
+$('#regionChips').addEventListener('click', (e) => {
+  const c = e.target.closest('.chip'); if (!c) return;
+  artistView.region = c.dataset.region;
+  document.querySelectorAll('#regionChips .chip').forEach((x) => x.classList.toggle('on', x === c));
+  loadArtists(true);
+});
+$('#genderChips').addEventListener('click', (e) => {
+  const c = e.target.closest('.chip'); if (!c) return;
+  artistView.gender = c.dataset.gender;
+  document.querySelectorAll('#genderChips .chip').forEach((x) => x.classList.toggle('on', x === c));
+  loadArtists(true);
+});
+$('#moreArtists').onclick = () => { artistView.offset += 30; loadArtists(false); };
+
+/* ================ 收藏 Tab ================ */
+let favQuery = '';
+/** 收藏筛选：关键词 / 歌名首字母 / 歌手首字母都能用 */
+function matchSong(s, q) {
+  if (!q) return true;
+  q = q.toLowerCase();
+  return (s.title || '').toLowerCase().includes(q)
+    || (s.artist || '').toLowerCase().includes(q)
+    || (s.init && s.init.startsWith(q))
+    || (s.py && s.py.startsWith(q))
+    || (s.ainit && s.ainit.startsWith(q))
+    || (s.apy && s.apy.startsWith(q));
+}
+async function loadFavs() {
+  const r = await api('/api/favs');
+  const items = r.items.filter((s) => matchSong(s, favQuery));
+  $('#favList').innerHTML = items.length
+    ? items.map(songRow).join('')
+    : '<div class="empty">' + (favQuery ? '收藏里没找到匹配的歌' : '还没有收藏<br/>在歌曲右边点 ❤️ 收藏喜欢的歌') + '</div>';
+}
+$('#favQ').addEventListener('input', (e) => { favQuery = e.target.value.trim(); loadFavs(); });
+$('#favList').addEventListener('click', (e) => {
+  const heart = e.target.closest('.heart');
+  if (heart) {
+    return api('/api/favs/toggle', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ songId: heart.dataset.id }) }).then(() => { loadFavs(); });
+  }
+  const add = e.target.closest('.add');
+  if (add) return order(add.dataset.id);
+});
+$('#favAll').onclick = async () => {
+  const r = await api('/api/favs');
+  if (!r.items.length) return toast('还没有收藏');
+  await api('/api/queue', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ songIds: r.items.map((s) => s.id), by: me || '收藏单' }) });
+  toast('已把 ' + r.items.length + ' 首收藏加入队列');
+};
+$('#favShuffle').onclick = async () => {
+  const r = await api('/api/favs');
+  if (!r.items.length) return toast('还没有收藏');
+  const ids = r.items.map((s) => s.id).sort(() => Math.random() - 0.5);
+  await api('/api/queue', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ songIds: ids, by: me || '收藏单' }) });
+  toast('已打乱加入 ' + ids.length + ' 首');
+};
+$('#favRandom').onclick = () => {
+  return api('/api/random?n=1&from=favs').then((r) => {
+    if (!r.items.length) return toast('先收藏几首歌吧');
+    order(r.items[0].id);
+  });
+};
+
+/* ================ 已点 Tab ================ */
+let queueQuery = '';
+function renderQueue() {
+  const cur = state.current;
+  const cp = (cur && cur.prepare) || {};
+  const cbusy = cp.state === 'running' || cp.state === 'queued' || cp.state === 'probing' || cp.state === 'pending';
+  $('#nowCardWrap').innerHTML = cur
+    ? '<div class="nowcard"><div class="lbl">正在播放</div><div class="t">' + esc(cur.song.title) + '</div>' +
+      '<div class="a">' + esc(cur.song.artist) + (cur.by ? ' · ' + esc(cur.by) + ' 点的' : '') + '</div>' +
+      (cbusy ? '<div class="prep" style="margin-top:6px"><i><b style="width:' + Math.max(6, cp.progress || 0) + '%"></b></i>读取音轨中' + (cp.progress ? ' ' + cp.progress + '%' : '') + '</div>' : '') +
+      '<div class="ops">' +
+        '<button class="ctl pri" data-act="next">切歌 ▶︎</button>' +
+        '<button class="ctl" data-act="replay">重唱 ↻</button>' +
+        (cur.trackCount > 1 ? '<button class="ctl" data-act="track">' + (cur.trackRole === 'acc' ? '切原唱 🎤' : '切伴唱 🎤') + '</button>' : '') +
+        '<button class="ctl" data-act="pause">' + (cur.paused ? '继续' : '暂停') + '</button>' +
+      '</div></div>'
+    : '<div class="nowcard"><div class="lbl">空闲中</div><div class="t">没有歌曲在唱</div><div class="a">点一首歌，或在后台设置里开启空闲自动播放</div></div>';
+  const q = queueQuery.toLowerCase();
+  const items = state.queue.filter((x) => !q
+    || (x.song.title || '').toLowerCase().includes(q)
+    || (x.song.artist || '').toLowerCase().includes(q));
+  $('#queueList').innerHTML = items.length
+    ? items.map((x) => {
+        const i = state.queue.indexOf(x);
+        const p = x.prepare || {};
+        const busy = p.state === 'running' || p.state === 'queued' || p.state === 'probing' || p.state === 'pending';
+        const prep = busy
+          ? '<div class="prep"><i><b style="width:' + (p.state === 'pending' ? 6 : Math.max(6, p.progress || 0)) + '%"></b></i>读取音轨中' + (p.progress ? ' ' + p.progress + '%' : '') + '</div>'
+          : '';
+        return '<div class="qitem" data-qid="' + x.qid + '">' +
+        '<span class="idx">' + (i + 1) + '</span>' +
+        '<div class="mid"><div class="t">' + esc(x.song.title) + '</div><div class="a">' + esc(x.song.artist) + (x.by ? ' · ' + esc(x.by) : '') + '</div>' + prep + '</div>' +
+        '<button class="iconbtn" data-act="top" title="置顶">⬆️</button>' +
+        '<button class="iconbtn" data-act="remove" title="删除">✕</button>' +
+      '</div>';
+      }).join('')
+    : '<div class="empty">' + (queueQuery ? '已点里没找到匹配的歌' : '队列空空的') + '</div>';
+}
+$('#qQ').addEventListener('input', (e) => { queueQuery = e.target.value.trim(); renderQueue(); });
+
+$('#view-queue').addEventListener('click', async (e) => {
+  const act = e.target.closest('[data-act]');
+  if (!act) return;
+  const a = act.dataset.act;
+  if (a === 'next') return api('/api/player/next', { method: 'POST' });
+  if (a === 'replay') { await api('/api/player/replay', { method: 'POST' }); return toast('重唱！从头开始 ↻'); }
+  if (a === 'track') return api('/api/player/toggle-track', { method: 'POST' });
+  if (a === 'pause') return api('/api/player/toggle', { method: 'POST' });
+  const qid = act.closest('.qitem') && act.closest('.qitem').dataset.qid;
+  if (!qid) return;
+  if (a === 'top') await api('/api/queue/' + qid + '/top', { method: 'POST' });
+  if (a === 'remove') await api('/api/queue/' + qid + '/remove', { method: 'POST' });
+});
+$('#qShuffle').onclick = async () => {
+  const r = await api('/api/queue/shuffle', { method: 'POST' });
+  if (r.ok) toast('已打乱已点顺序 🔀');
+  else toast('至少要有两首才能打乱');
+};
+$('#qClear').onclick = async () => {
+  if (!confirm('清空已点列表？')) return;
+  await api('/api/queue/clear', { method: 'POST' });
+};
+
+/* ================ 预览 Tab（投影仪正在播的画面） ================ */
+let previewSongId = '';
+
+function stopPreview() {
+  const v = document.getElementById('previewVideo');
+  if (v) { try { v.pause(); } catch (e) {} v.removeAttribute('src'); v.load(); }
+  previewSongId = '';
+}
+
+/** 拉当前歌的兼容流（h264+aac，手机能放）；连不上就提示 */
+async function loadPreview() {
+  const box = $('#previewBox');
+  const cur = state.current;
+  if (!cur) {
+    stopPreview();
+    box.innerHTML = '<div class="empty">当前没有歌曲在唱<br/>点一首歌，这里就会显示投影仪的画面</div>';
+    return;
+  }
+  const song = cur.song;
+  if (song.vcodec && song.vcodec !== 'h264') {
+    stopPreview();
+    box.innerHTML = '<div class="empty">这首是 ' + esc((song.vcodec || '').toUpperCase()) + ' 片源<br/>手机解不了这种视频，去投影仪看吧</div>';
+    return;
+  }
+  if (previewSongId === song.id && document.getElementById('previewVideo')) { syncPreview(); return; }
+  stopPreview();
+  box.innerHTML = '<div class="empty">正在连接预览…</div>';
+  try {
+    const track = cur.track != null ? cur.track : 0;
+    let url = '';
+    for (let t = 0; t < 12 && !url; t++) {
+      const p = await api('/api/prepare/' + song.id + '?track=' + track + '&client=web&start=1');
+      if (p.state === 'ready' && p.url) url = p.url;
+      else if (p.state === 'unsupported' || p.state === 'error') {
+        box.innerHTML = '<div class="empty">预览不可用：' + esc(p.error || '片源不支持') + '</div>';
+        return;
+      } else await new Promise((r) => setTimeout(r, 1200));
+    }
+    if (!url) url = '/stream/' + song.id + '?track=' + track + '&client=web';
+    box.innerHTML = '<video id="previewVideo" playsinline muted controls preload="metadata" ' +
+      'style="width:100%;border-radius:14px;background:#000;aspect-ratio:16/9" src="' + url + '"></video>' +
+      '<div class="hint" style="margin-top:6px">预览已静音（客厅正在放原声）· 点「⛶ 全屏横屏」观看</div>';
+    previewSongId = song.id;
+    const v = document.getElementById('previewVideo');
+    v.addEventListener('loadedmetadata', () => {
+      try { const pos = (state.current && state.current.position) || 0; if (pos > 2) v.currentTime = pos; } catch (e) {}
+    });
+    v.addEventListener('click', goFullPreview);
+    syncPreview();
+  } catch (e) {
+    box.innerHTML = '<div class="empty">预览不可用：' + esc(e.message) + '</div>';
+  }
+}
+
+/** 投影仪上暂停/继续，预览也跟着 */
+function syncPreview() {
+  const v = document.getElementById('previewVideo');
+  if (!v || !state.current) return;
+  if (state.current.paused) { try { v.pause(); } catch (e) {} }
+  else v.play().catch(() => {});
+}
+
+async function goFullPreview() {
+  const v = document.getElementById('previewVideo');
+  if (!v) return;
+  v.muted = false;
+  v.controls = true;
+  try { if (v.requestFullscreen) await v.requestFullscreen(); } catch (e) {}
+  try { if (screen.orientation && screen.orientation.lock) await screen.orientation.lock('landscape'); } catch (e) {}
+  v.play().catch(() => {});
+}
+$('#pvFull').onclick = goFullPreview;
+
+/* ================ 启动 ================ */
+(async function boot() {
+  if (!me) {
+    const name = prompt('怎么称呼你？（点歌时会显示）') || '';
+    me = name.trim().slice(0, 12);
+    if (me) localStorage.setItem('ktv.name', me);
+  }
+  connect();
+  loadFacets();
+  loadSongs(true);
+  const hl = $('#homeLink');
+  if (hl) { hl.textContent = location.host; hl.href = '/'; }
+})();
+</script>
+</body>
+</html>

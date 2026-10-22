@@ -1,0 +1,5 @@
+#!/bin/bash
+# 配置向导前：无需处理，保持幂等
+set -u
+echo "config_init: ok"
+exit 0

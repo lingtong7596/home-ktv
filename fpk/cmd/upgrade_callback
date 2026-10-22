@@ -1,0 +1,21 @@
+#!/bin/bash
+# 升级后：补齐新版本缺失的配置项，保留用户原有设置，修补可执行权限
+set -u
+
+APPDEST="${TRIM_APPDEST:-/var/apps/${TRIM_APPNAME:-ktv}/target}"
+PKGVAR="${TRIM_PKGVAR:-/var/apps/${TRIM_APPNAME:-ktv}/var}"
+
+mkdir -p "${PKGVAR}/cache" 2>/dev/null || true
+chmod +x "${APPDEST}/node/bin/node" 2>/dev/null || true
+chmod +x "${APPDEST}"/ffmpeg/ffmpeg "${APPDEST}"/ffmpeg/ffprobe 2>/dev/null || true
+chmod +x "${APPDEST}"/../cmd/* 2>/dev/null || true
+
+# 仅在配置缺失时补默认值，不覆盖用户修改
+if [ ! -f "${PKGVAR}/config.json" ]; then
+  "${APPDEST}"/../cmd/install_callback || true
+else
+  echo "config kept: ${PKGVAR}/config.json"
+fi
+
+echo "upgrade_callback done"
+exit 0

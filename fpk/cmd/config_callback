@@ -1,0 +1,9 @@
+#!/bin/bash
+# 配置向导后：重启服务使新配置生效
+set -u
+HERE="$(cd "$(dirname "$0")" && pwd)"
+if [ -x "${HERE}/main" ]; then
+  "${HERE}/main" restart || true
+fi
+echo "config_callback done"
+exit 0

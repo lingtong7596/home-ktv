@@ -1,0 +1,625 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+<title>家庭 KTV · 投影仪</title>
+<style>
+  :root {
+    --bg: #07080d;
+    --panel: rgba(16, 18, 28, .94);
+    --line: rgba(255, 255, 255, .12);
+    --text: #f2f4f8;
+    --muted: #9aa3b5;
+    --brand: #ff4d6d;
+    --brand2: #ffb347;
+    --ok: #37d67a;
+  }
+  * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+  html, body { margin: 0; height: 100%; background: var(--bg); color: var(--text); overflow: hidden;
+    font-family: "PingFang SC", "Microsoft YaHei", "Noto Sans CJK SC", system-ui, sans-serif; }
+  body.idle-cursor { cursor: none; }
+
+  #stage { position: fixed; inset: 0; display: flex; align-items: center; justify-content: center; }
+  video { width: 100%; height: 100%; object-fit: contain; background: #000; display: none; }
+  video.on { display: block; }
+
+  /* ---------- 待机页 ---------- */
+  #idle { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; gap: 6vw;
+    background: radial-gradient(1200px 700px at 20% 20%, #1a1030 0%, #07080d 60%); }
+  #idle.hide { display: none; }
+  .idle-left { max-width: 46vw; }
+  .room { font-size: 1.1vw; letter-spacing: .5em; color: var(--brand2); text-transform: uppercase; }
+  .bigtitle { font-size: 6vw; font-weight: 800; line-height: 1.05; margin: .4vw 0 1vw;
+    background: linear-gradient(100deg, #fff 20%, var(--brand) 60%, var(--brand2) 90%);
+    -webkit-background-clip: text; background-clip: text; color: transparent; }
+  .tips { color: var(--muted); font-size: 1.35vw; line-height: 2.1; }
+  .tips b { color: #fff; font-weight: 600; }
+  .qrbox { background: #fff; padding: 1.1vw; border-radius: 1.4vw; box-shadow: 0 30px 80px rgba(0,0,0,.6); }
+  .qrbox img { display: block; width: 17vw; height: 17vw; }
+  .qrlabel { margin-top: 1vw; text-align: center; color: #111; font-size: 1vw; font-weight: 600; }
+  .idle-actions { margin-top: 1.6vw; display: flex; gap: .8vw; }
+  .idle-actions a { text-decoration: none; color: #fff; border: 1px solid var(--line);
+    background: rgba(255,255,255,.06); padding: .6vw 1.2vw; border-radius: 999px; font-size: 1vw; }
+
+  /* ---------- 覆盖层 ---------- */
+  .overlay { position: absolute; opacity: 0; transition: opacity .35s; pointer-events: none; }
+  .overlay.show { opacity: 1; pointer-events: auto; }
+
+  #topbar { top: 0; left: 0; right: 0; padding: 2.2vw 2.4vw 3.4vw;
+    background: linear-gradient(180deg, rgba(0,0,0,.75), transparent); display: flex; align-items: flex-start;
+    justify-content: space-between; }
+  .now .t { font-size: 2.2vw; font-weight: 700; }
+  .now .a { font-size: 1.15vw; color: var(--muted); margin-top: .4vw; }
+  .badges { display: flex; gap: .6vw; margin-top: .8vw; }
+  .badge { font-size: .95vw; padding: .25vw .8vw; border-radius: 999px; border: 1px solid var(--line);
+    background: rgba(255,255,255,.06); color: #dfe4ee; }
+  .badge.hot { background: linear-gradient(90deg, var(--brand), var(--brand2)); border: 0; color: #2a0b12; font-weight: 700; }
+
+  #qrmini { display: flex; flex-direction: column; align-items: center; gap: .6vw; }
+  #qrmini .card { background: #fff; padding: .6vw; border-radius: .8vw; }
+  #qrmini img { display: block; width: 8.5vw; height: 8.5vw; }
+  #qrmini .cap { font-size: .95vw; color: rgba(255,255,255,.85); background: rgba(0,0,0,.45);
+    padding: .2vw .7vw; border-radius: 999px; }
+
+  #controls { left: 0; right: 0; bottom: 0; padding: 3.6vw 2.4vw 2vw;
+    background: linear-gradient(0deg, rgba(0,0,0,.8), transparent); display: flex; align-items: center;
+    justify-content: space-between; gap: 2vw; }
+  .btns { display: flex; align-items: center; gap: .9vw; }
+  button.ctl { display: inline-flex; align-items: center; gap: .6vw; border: 1px solid var(--line);
+    background: rgba(255,255,255,.08); color: #fff; border-radius: 999px; padding: .85vw 1.5vw; font-size: 1.05vw;
+    font-weight: 600; cursor: pointer; backdrop-filter: blur(8px); transition: .18s; font-family: inherit; }
+  button.ctl:hover { background: rgba(255,255,255,.18); transform: translateY(-1px); }
+  button.ctl:active { transform: scale(.97); }
+  button.ctl.primary { background: linear-gradient(90deg, var(--brand), #ff7a45); border: 0; color: #fff; }
+  button.ctl.ghost { background: transparent; }
+  button.ctl[disabled] { opacity: .38; cursor: default; }
+  button.ctl.fav-on { background: rgba(255,77,109,.9); border-color: transparent; color: #fff; }
+  .progress { position: absolute; left: 0; right: 0; bottom: 0; height: .35vw; background: rgba(255,255,255,.12); }
+  .progress i { display: block; height: 100%; width: 0; background: linear-gradient(90deg, var(--brand), var(--brand2)); }
+
+  #queuePanel { top: 0; right: 0; bottom: 0; width: 26vw; background: var(--panel); backdrop-filter: blur(20px);
+    border-left: 1px solid var(--line); padding: 2.2vw 1.4vw; overflow-y: auto; transform: translateX(4vw); }
+  #queuePanel.show { transform: none; }
+  #queuePanel h3 { margin: 0 0 1.2vw; font-size: 1.3vw; color: #fff; display: flex; align-items: center; gap: .6vw; }
+  #queuePanel h3 span { color: var(--muted); font-weight: 400; font-size: 1vw; }
+  #queuePanel h3 button { margin-left: auto; }
+  .qitem { display: flex; align-items: center; gap: .8vw; padding: .8vw 0; border-bottom: 1px dashed var(--line); }
+  .qitem .n { color: var(--brand2); font-weight: 700; font-size: 1vw; width: 1.4vw; }
+  .qitem .x { flex: 1; min-width: 0; font-size: 1.05vw; }
+  .qitem .x small { display: block; color: var(--muted); font-size: .85vw; margin-top: .2vw; }
+  .qitem .prep { color: var(--brand2); font-size: .82vw; margin-top: .2vw; }
+  .qitem button { border: 1px solid var(--line); background: rgba(255,255,255,.06); color: #cfd6e4;
+    border-radius: 6px; font-size: .85vw; padding: .18vw .5vw; cursor: pointer; font-family: inherit; }
+  .qitem button:hover { background: rgba(255,255,255,.18); color: #fff; }
+  .empty { color: var(--muted); font-size: 1vw; line-height: 1.9; }
+  .qheadbtns { display: flex; gap: .5vw; margin-bottom: 1vw; }
+  .qheadbtns button { flex: 1; border: 1px solid var(--line); background: rgba(255,255,255,.06); color: #dfe4ee;
+    border-radius: 8px; padding: .45vw 0; font-size: .85vw; cursor: pointer; font-family: inherit; }
+  .qheadbtns button:hover { background: rgba(255,255,255,.16); }
+
+  #preparing { position: absolute; inset: 0; display: none; flex-direction: column; align-items: center;
+    justify-content: center; gap: 1.2vw; background: rgba(5,6,10,.92); z-index: 5; }
+  #preparing.show { display: flex; }
+  .spinner { width: 4vw; height: 4vw; border-radius: 50%; border: .35vw solid rgba(255,255,255,.15);
+    border-top-color: var(--brand); animation: spin 1s linear infinite; }
+  @keyframes spin { to { transform: rotate(360deg); } }
+  #preparing .msg { font-size: 1.4vw; color: #fff; }
+  #preparing .sub { font-size: 1vw; color: var(--muted); }
+
+  #toast { position: absolute; left: 50%; bottom: 12vw; transform: translate(-50%, 2vw); opacity: 0;
+    background: rgba(255,255,255,.96); color: #111; padding: .9vw 1.6vw; border-radius: 999px;
+    font-size: 1.15vw; font-weight: 600; transition: .3s; pointer-events: none; z-index: 8; }
+  #toast.show { opacity: 1; transform: translate(-50%, 0); }
+
+  #startHint { position: absolute; inset: 0; display: none; align-items: center; justify-content: center;
+    background: rgba(0,0,0,.6); z-index: 6; font-size: 1.6vw; cursor: pointer; }
+
+  /* 点歌台（手机页嵌在播放页里，电脑上也能直接点歌） */
+  #browser { position: absolute; inset: 0; z-index: 20; display: none; background: rgba(4,5,9,.96); }
+  #browser.show { display: block; }
+  #browser iframe { width: 100%; height: 100%; border: 0; background: #0d0e14; }
+  #browserBar { position: absolute; top: 1vw; right: 1.2vw; z-index: 21; display: flex; gap: .6vw; }
+  #browserBar button { border: 0; background: rgba(255,255,255,.9); color: #111; border-radius: 999px;
+    padding: .55vw 1.2vw; font-size: .95vw; font-weight: 700; cursor: pointer; font-family: inherit; }
+
+  .conn { position: absolute; left: 2.4vw; bottom: 1.2vw; font-size: .8vw; color: rgba(255,255,255,.35); }
+  .conn.bad { color: #ff8080; }
+  .conn a { color: rgba(255,255,255,.5); text-decoration: none; }
+</style>
+</head>
+<body>
+<div id="stage">
+  <video id="video" playsinline preload="auto"></video>
+
+  <!-- 待机 -->
+  <div id="idle">
+    <div class="idle-left">
+      <div class="room" id="roomName">LIVING ROOM</div>
+      <div class="bigtitle">家庭 KTV</div>
+      <div class="tips">
+        <div>① 手机 <b>微信扫一扫</b> 右侧二维码</div>
+        <div>② 搜索歌名 / 歌手 / <b>拼音首字母</b>，点歌</div>
+        <div>③ 本屏自动连播，遥控器或手机可切歌</div>
+      </div>
+      <div class="idle-actions">
+        <a href="/m/" id="linkMobile">📱 打开点歌台</a>
+        <a href="/admin/" id="linkAdmin">⚙️ 后台管理</a>
+      </div>
+    </div>
+    <div class="qrbox">
+      <img id="qrBig" alt="点歌二维码" />
+      <div class="qrlabel">扫码点歌</div>
+    </div>
+  </div>
+
+  <!-- 顶部信息 -->
+  <div class="overlay" id="topbar">
+    <div class="now">
+      <div class="t" id="nowTitle">—</div>
+      <div class="a" id="nowArtist">—</div>
+      <div class="badges">
+        <span class="badge hot" id="trackBadge">原唱</span>
+        <span class="badge" id="queueBadge">已点 0 首</span>
+        <span class="badge" id="byBadge" style="display:none"></span>
+      </div>
+    </div>
+    <div id="qrmini">
+      <div class="card"><img id="qrSmall" alt="点歌二维码" /></div>
+      <div class="cap">手机扫码点歌</div>
+    </div>
+  </div>
+
+  <!-- 底部控制 -->
+  <div class="overlay" id="controls">
+    <div class="btns">
+      <button class="ctl" id="btnPrev">⏮ 上一首</button>
+      <button class="ctl primary" id="btnPlay">⏸ 暂停</button>
+      <button class="ctl" id="btnNext">⏭ 切歌</button>
+      <button class="ctl" id="btnTrack">🎤 原唱</button>
+      <button class="ctl" id="btnReplay">↻ 重唱</button>
+      <button class="ctl" id="btnFav">♥ 收藏</button>
+    </div>
+    <div class="btns">
+      <button class="ctl ghost" id="btnQueue">☰ 已点</button>
+      <button class="ctl ghost" id="btnBrowser">🎵 点歌台</button>
+      <button class="ctl ghost" id="btnFs">⛶ 全屏</button>
+    </div>
+    <div class="progress"><i id="bar"></i></div>
+  </div>
+
+  <!-- 已点队列 -->
+  <aside class="overlay" id="queuePanel">
+    <h3>已点歌曲 <span id="queueCount">0 首</span>
+      <button class="ctl ghost" id="btnQueueClose" style="padding:.3vw .8vw;font-size:.85vw">✕ 关闭</button>
+    </h3>
+    <div class="qheadbtns">
+      <button id="btnQShuffle">🔀 打乱顺序</button>
+      <button id="btnQClear">清空</button>
+    </div>
+    <div id="queueList"></div>
+  </aside>
+
+  <!-- 点歌台 -->
+  <div id="browser">
+    <div id="browserBar">
+      <button id="btnBrowserClose">✕ 返回播放</button>
+    </div>
+    <iframe id="browserFrame" title="点歌台"></iframe>
+  </div>
+
+  <!-- 准备中 -->
+  <div id="preparing">
+    <div class="spinner"></div>
+    <div class="msg" id="prepMsg">正在准备伴奏…</div>
+    <div class="sub" id="prepSub">第一次播放需要换封装，请稍候</div>
+  </div>
+
+  <div id="startHint">点击任意位置开始播放</div>
+  <div id="toast"></div>
+  <div class="conn" id="conn">● 已连接</div>
+</div>
+
+<script>
+const $ = (id) => document.getElementById(id);
+const video = $('video');
+
+let state = null;
+let lastToken = -1;
+let lastSongId = null;
+let loadSeq = 0;
+let hideTimer = null;
+let queueOpen = false;
+let reportTimer = null;
+/** 刚刚在本机点过暂停/播放的时间：这段时间内不因服务端旧状态把播放拉回来 */
+let localControlAt = 0;
+
+/* ---------------- 二维码 ---------------- */
+function initQr() {
+  const url = `${location.origin}/m/`;
+  const src = `/api/qr.svg?text=${encodeURIComponent(url)}&dark=${encodeURIComponent('#111111')}`;
+  $('qrBig').src = src + '&scale=10';
+  $('qrSmall').src = src + '&scale=5';
+  $('linkMobile').href = '/m/';
+  $('linkAdmin').href = '/admin/';
+}
+
+/* ---------------- 状态渲染 ---------------- */
+function render() {
+  const cur = state && state.current;
+  document.getElementById('roomName').textContent = (state && state.room) || '客厅';
+
+  if (!cur) {
+    $('idle').classList.remove('hide');
+    video.classList.remove('on');
+    video.removeAttribute('src');
+    video.load();
+    lastToken = -1;
+    lastSongId = null;
+    hidePreparing();
+    $('queueBadge').textContent = `已点 ${state ? state.queue.length : 0} 首`;
+    $('topbar').classList.remove('show');
+    renderQueue();
+    return;
+  }
+
+  $('idle').classList.add('hide');
+  video.classList.add('on');
+
+  $('nowTitle').textContent = cur.song.title;
+  $('nowArtist').textContent = cur.song.artist + (cur.song.lang ? ` · ${cur.song.lang}` : '');
+  const isAcc = cur.trackRole === 'acc';
+  $('trackBadge').textContent = cur.trackCount > 1 ? (isAcc ? '伴唱' : '原唱') : '单音轨';
+  $('btnTrack').textContent = '🎤 ' + (isAcc ? '伴唱' : '原唱');
+  $('btnTrack').disabled = cur.trackCount < 2;
+  $('queueBadge').textContent = `已点 ${state.queue.length} 首`;
+  $('byBadge').style.display = cur.by ? '' : 'none';
+  $('byBadge').textContent = cur.by ? `${cur.by} 点的` : '';
+  $('btnPlay').textContent = cur.paused ? '▶ 播放' : '⏸ 暂停';
+
+  // 收藏按钮状态跟着服务端走（以前从来不刷新，所以永远是白的）
+  const fav = !!(state.favIds || []).includes(cur.song.id);
+  $('btnFav').classList.toggle('fav-on', fav);
+  $('btnFav').textContent = fav ? '❤ 已收藏' : '♡ 收藏';
+
+  renderQueue();
+  if (cur.token !== lastToken) {
+    lastToken = cur.token;
+    loadSong(cur);
+  } else {
+    syncPosition(cur);
+    // 当前这首如果还要处理，前台才显示"读取音轨中"
+    if (cur.prepare && (cur.prepare.state === 'running' || cur.prepare.state === 'queued')) {
+      showPreparing(`正在处理音轨… ${cur.prepare.progress || 0}%`, '视频不转码，只换封装/音频，通常几秒');
+    }
+  }
+}
+
+function renderQueue() {
+  const list = (state && state.queue) || [];
+  $('queueCount').textContent = `${list.length} 首`;
+  $('queueList').innerHTML = list.length
+    ? list.map((q, i) => {
+        const p = q.prepare || {};
+        const busy = p.state === 'running' || p.state === 'queued' || p.state === 'probing' || p.state === 'pending';
+        return `<div class="qitem">
+          <div class="n">${i + 1}</div>
+          <div class="x">${esc(q.song.title)}<small>${esc(q.song.artist)}${q.by ? ' · ' + esc(q.by) : ''}</small>
+            ${busy ? `<div class="prep">读取音轨中${p.progress ? ' ' + p.progress + '%' : '…'}</div>` : ''}</div>
+          <button data-q="${q.qid}" data-act="top" title="置顶">⬆</button>
+          <button data-q="${q.qid}" data-act="remove" title="删除">✕</button>
+        </div>`;
+      }).join('')
+    : '<div class="empty">还没有人点歌<br>扫码就能点，唱完自动接下一首</div>';
+}
+
+function esc(s) {
+  return String(s || '').replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' })[c]);
+}
+
+/* ---------------- 载入视频 ---------------- */
+async function loadSong(cur) {
+  const seq = ++loadSeq;
+  showPreparing('正在准备…', '正在读取片源信息');
+  const ready = await waitReady(cur, seq);
+  if (!ready || seq !== loadSeq) return;
+
+  video.src = cur.streamUrl;
+  video.load();
+  const applyPos = () => {
+    const target = estimatePosition();
+    if (target > 1) video.currentTime = Math.min(target, (video.duration || target) - 0.4);
+    if (!cur.paused) tryPlay();
+  };
+  video.addEventListener('loadedmetadata', applyPos, { once: true });
+  hidePreparing();
+  startReport();
+}
+
+function estimatePosition() {
+  const cur = state && state.current;
+  if (!cur) return 0;
+  if (cur.paused) return cur.position || 0;
+  return (cur.position || 0) + Math.max(0, (Date.now() - (cur.positionAt || Date.now())) / 1000);
+}
+
+async function waitReady(cur, seq) {
+  const deadline = Date.now() + 180000; // 最多等 3 分钟，避免无限转圈
+  while (Date.now() < deadline) {
+    if (seq !== loadSeq) return false;
+    let r;
+    try {
+      r = await fetch(`/api/prepare/${cur.song.id}?track=${cur.track}&client=web&start=1`).then((x) => x.json());
+    } catch {
+      await sleep(1200);
+      continue;
+    }
+    if (seq !== loadSeq) return false;
+    const st = r.state;
+    if (r.direct || st === 'ready' || st === 'direct') return true;
+    // 兼容处理关着：直接拿原文件播，不再等
+    if (!st || st === 'off') return true;
+    if (st === 'unsupported') {
+      showPreparing('这台设备的浏览器播不了这个片源', r.error || '请在投影仪上播放');
+      return false;
+    }
+    if (st === 'error') {
+      showPreparing('音轨处理失败', r.error || '请检查 NAS 上的 ffmpeg');
+      return false;
+    }
+    showPreparing(`正在处理音轨… ${r.progress || 0}%`, '视频不转码，只换封装/音频，通常几秒');
+    await sleep(900);
+  }
+  showPreparing('处理超时', '请稍后重试，或改用投影仪播放');
+  return false;
+}
+
+const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+
+function syncPosition(cur) {
+  if (!video.duration || video.readyState < 2) return;
+  const target = estimatePosition();
+  if (Math.abs(video.currentTime - target) > 3 && Date.now() - (cur.positionAt || 0) < 5000) {
+    video.currentTime = Math.min(target, video.duration - 0.3);
+  }
+  // 服务端说停就停
+  if (cur.paused && !video.paused) video.pause();
+  // 服务端说播才播；但本机刚操作过的 3 秒内不反悔（防止旧状态把暂停顶回来）
+  if (!cur.paused && video.paused && video.readyState >= 2 && Date.now() - localControlAt > 3000) tryPlay();
+}
+
+function tryPlay() {
+  const p = video.play();
+  if (p && p.catch) p.catch(() => { $('startHint').style.display = 'flex'; });
+}
+
+/* ---------------- 播放/暂停（本机立即生效，不用等服务器回包） ---------------- */
+function togglePlay() {
+  const wasPaused = state && state.current ? state.current.paused : video.paused;
+  const willPause = !wasPaused;
+  localControlAt = Date.now();
+  if (willPause) {
+    video.pause();
+    if (state && state.current) state.current.paused = true;
+    $('btnPlay').textContent = '▶ 播放';
+  } else {
+    tryPlay();
+    if (state && state.current) state.current.paused = false;
+    $('btnPlay').textContent = '⏸ 暂停';
+  }
+  fetch('/api/player/' + (willPause ? 'pause' : 'resume'), { method: 'POST' }).catch(() => {});
+}
+
+/* ---------------- 上报进度（只报位置，不报暂停状态） ---------------- */
+function startReport() {
+  clearInterval(reportTimer);
+  reportTimer = setInterval(() => {
+    if (!state || !state.current || video.readyState < 2) return;
+    if (video.paused) return;
+    fetch('/api/player/report', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ position: video.currentTime }),
+    }).catch(() => {});
+  }, 2500);
+}
+
+function updateBar() {
+  if (!video.duration) return;
+  $('bar').style.width = `${(video.currentTime / video.duration) * 100}%`;
+}
+video.addEventListener('timeupdate', updateBar);
+
+video.addEventListener('ended', () => {
+  fetch('/api/player/report', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ ended: true }),
+  }).catch(() => {});
+});
+
+video.addEventListener('error', () => {
+  if (!video.src) return;
+  const code = video.error && video.error.code;
+  const msg = code === 3 ? '视频解码失败' : code === 4 ? '片源格式或网络不支持' : '播放失败';
+  showPreparing(msg, '网页播放器对 mkv/mpg 支持有限，建议在投影仪上播放');
+});
+
+/* ---------------- UI 交互 ---------------- */
+function showPreparing(msg, sub) {
+  $('prepMsg').textContent = msg;
+  $('prepSub').textContent = sub || '';
+  $('preparing').classList.add('show');
+}
+function hidePreparing() { $('preparing').classList.remove('show'); }
+
+function toast(text) {
+  const el = $('toast');
+  el.textContent = text;
+  el.classList.add('show');
+  clearTimeout(el._t);
+  el._t = setTimeout(() => el.classList.remove('show'), 2600);
+}
+
+function revealUI() {
+  // 点歌台（iframe）开着时，歌曲信息条和控制条都必须让位，不然会叠在点歌台上
+  const inBrowser = $('browser').classList.contains('show');
+  if (inBrowser) {
+    document.body.classList.remove('idle-cursor');
+    clearTimeout(hideTimer);
+    return;
+  }
+  $('topbar').classList.add('show');
+  $('controls').classList.add('show');
+  document.body.classList.remove('idle-cursor');
+  clearTimeout(hideTimer);
+  hideTimer = setTimeout(() => {
+    if (!queueOpen) {
+      $('topbar').classList.remove('show');
+      $('controls').classList.remove('show');
+      document.body.classList.add('idle-cursor');
+    }
+  }, 5000);
+}
+document.addEventListener('mousemove', revealUI);
+document.addEventListener('touchstart', revealUI);
+
+/* 已点侧栏：开/关都要能点到，点外面、按 ESC、按关闭按钮都能收起来 */
+function openQueue() {
+  queueOpen = true;
+  $('queuePanel').classList.add('show');
+  $('topbar').classList.add('show');
+  $('controls').classList.add('show');
+  clearTimeout(hideTimer);
+}
+function closeQueue() {
+  queueOpen = false;
+  $('queuePanel').classList.remove('show');
+  revealUI();
+}
+function toggleQueue() { queueOpen ? closeQueue() : openQueue(); }
+
+$('btnQueue').onclick = (e) => { e.stopPropagation(); toggleQueue(); };
+$('btnQueueClose').onclick = (e) => { e.stopPropagation(); closeQueue(); };
+document.addEventListener('click', (e) => {
+  if (!queueOpen) return;
+  if (e.target.closest && (e.target.closest('#queuePanel') || e.target.closest('#btnQueue'))) return;
+  closeQueue();
+}, true);
+
+$('btnPlay').onclick = () => togglePlay();
+$('btnNext').onclick = () => fetch('/api/player/next', { method: 'POST' });
+$('btnPrev').onclick = () => fetch('/api/player/prev', { method: 'POST' });
+$('btnTrack').onclick = () => fetch('/api/player/toggle-track', { method: 'POST' });
+$('btnReplay').onclick = () => fetch('/api/player/replay', { method: 'POST' });
+$('btnFav').onclick = async () => {
+  if (!state || !state.current) return;
+  const id = state.current.song.id;
+  const r = await fetch('/api/favs/toggle', {
+    method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ songId: id }),
+  }).then((x) => x.json()).catch(() => null);
+  if (!r) return;
+  toast(r.fav ? '已收藏 ❤' : '已取消收藏');
+};
+$('btnFs').onclick = () => {
+  if (document.fullscreenElement) document.exitFullscreen();
+  else document.documentElement.requestFullscreen().catch(() => {});
+};
+
+/* 点歌台：把手机点歌页嵌进来，电脑上不用另开窗口 */
+$('btnBrowser').onclick = () => {
+  $('browserFrame').src = '/m/?embed=1';
+  $('browser').classList.add('show');
+  $('controls').classList.remove('show');
+  $('topbar').classList.remove('show');
+};
+$('btnBrowserClose').onclick = () => {
+  $('browser').classList.remove('show');
+  $('browserFrame').src = 'about:blank';
+  revealUI();
+};
+
+/* 队列条目操作 */
+$('queueList').addEventListener('click', async (e) => {
+  const b = e.target.closest('button[data-act]');
+  if (!b) return;
+  e.stopPropagation();
+  const qid = b.dataset.q;
+  if (b.dataset.act === 'top') await fetch(`/api/queue/${qid}/top`, { method: 'POST' });
+  if (b.dataset.act === 'remove') await fetch(`/api/queue/${qid}/remove`, { method: 'POST' });
+});
+$('btnQShuffle').onclick = async (e) => {
+  e.stopPropagation();
+  const r = await fetch('/api/queue/shuffle', { method: 'POST' }).then((x) => x.json());
+  toast(r.ok ? '已打乱顺序 🔀' : '至少要有两首才能打乱');
+};
+$('btnQClear').onclick = async (e) => {
+  e.stopPropagation();
+  if (!confirm('清空已点列表？')) return;
+  await fetch('/api/queue/clear', { method: 'POST' });
+};
+
+$('startHint').onclick = () => { $('startHint').style.display = 'none'; tryPlay(); };
+video.addEventListener('click', () => {
+  // 点画面 = 暂停/继续（和投影仪遥控器 OK 键一致）
+  if (queueOpen) { closeQueue(); return; }
+  togglePlay();
+});
+$('topbar').addEventListener('click', () => {});
+
+document.addEventListener('keydown', (e) => {
+  const inBrowser = $('browser').classList.contains('show');
+  if (inBrowser) {
+    if (e.key === 'Escape') $('btnBrowserClose').click();
+    return;
+  }
+  if (e.code === 'Space') { e.preventDefault(); togglePlay(); }
+  if (e.code === 'ArrowRight') fetch('/api/player/next', { method: 'POST' });
+  if (e.code === 'ArrowLeft') fetch('/api/player/prev', { method: 'POST' });
+  if (e.key === 't' || e.key === 'T') fetch('/api/player/toggle-track', { method: 'POST' });
+  if (e.key === 'f' || e.key === 'F') $('btnFs').click();
+  if (e.key === 'q' || e.key === 'Q') toggleQueue();
+  if (e.key === 'Escape' && queueOpen) closeQueue();
+});
+
+/* ---------------- SSE ---------------- */
+let lastStateAt = 0;
+function applyState(s) {
+  state = s;
+  lastStateAt = Date.now();
+  render();
+  $('conn').textContent = '● 已连接';
+  $('conn').classList.remove('bad');
+}
+
+function connect() {
+  const es = new EventSource('/api/events?role=player');
+  es.addEventListener('state', (e) => applyState(JSON.parse(e.data)));
+  es.addEventListener('toast', (e) => {
+    const d = JSON.parse(e.data);
+    toast(d.by ? `${d.by} ${d.text}` : d.text);
+    revealUI();
+  });
+  es.onerror = () => {
+    $('conn').textContent = '● 正在重连…';
+    $('conn').classList.add('bad');
+  };
+  // 兜底：长时间收不到推送就主动拉一次
+  setInterval(async () => {
+    if (Date.now() - lastStateAt < 8000) return;
+    try { applyState(await fetch('/api/state').then((r) => r.json())); } catch {}
+  }, 4000);
+}
+
+(async function boot() {
+  window.__cfg = await fetch('/api/config').then((r) => r.json()).catch(() => ({}));
+  initQr();
+  $('conn').innerHTML = '● 已连接 · <a href="/">' + location.host + '</a>';
+  connect();
+  revealUI();
+  // 阻止投影仪休眠
+  try { await navigator.wakeLock?.request('screen'); } catch {}
+})();
+</script>
+</body>
+</html>

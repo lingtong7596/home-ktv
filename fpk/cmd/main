@@ -1,0 +1,137 @@
+#!/bin/bash
+# 家庭 KTV 服务生命周期脚本
+# 用法: main {start|stop|status|restart|log}
+# 依赖安装器注入的 TRIM_* 环境变量；未注入时按默认路径推导，便于手工调试。
+
+set -u
+
+APPNAME="${TRIM_APPNAME:-ktv}"
+APPDEST="${TRIM_APPDEST:-/var/apps/${APPNAME}/target}"
+PKGVAR="${TRIM_PKGVAR:-/var/apps/${APPNAME}/var}"
+
+NODE="${APPDEST}/node/bin/node"
+SERVER="${APPDEST}/server/server.js"
+LOG="${PKGVAR}/ktv.log"
+PIDF="${PKGVAR}/ktv.pid"
+PORT="${KTV_PORT:-${TRIM_SERVICE_PORT:-9188}}"
+HOST="0.0.0.0"
+
+# 用户可见错误输出（安装器/应用中心会展示该文件内容）
+fail_msg() {
+  if [ -n "${TRIM_TEMP_LOGFILE:-}" ]; then
+    echo "$*" >> "${TRIM_TEMP_LOGFILE}" 2>/dev/null || true
+  fi
+  echo "$*" >&2
+}
+
+mkdir -p "${PKGVAR}/cache" 2>/dev/null || true
+
+is_running() {
+  [ -f "${PIDF}" ] || return 1
+  local pid
+  pid=$(cat "${PIDF}" 2>/dev/null)
+  [ -n "${pid}" ] || return 1
+  kill -0 "${pid}" 2>/dev/null
+}
+
+port_ready() {
+  "${NODE}" -e 'var s=require("net").connect(+process.argv[2],process.argv[1]);s.on("connect",function(){s.end();process.exit(0)});s.on("error",function(){process.exit(1)});setTimeout(function(){process.exit(1)},800)' 127.0.0.1 "${PORT}" 2>/dev/null
+}
+
+start() {
+  if is_running; then
+    echo "${APPNAME} already running (pid $(cat "${PIDF}"))"
+    return 0
+  fi
+  if [ ! -x "${NODE}" ]; then
+    fail_msg "ERROR: node runtime not executable: ${NODE}"
+    exit 1
+  fi
+  if [ ! -f "${SERVER}" ]; then
+    fail_msg "ERROR: server.js not found: ${SERVER}"
+    exit 1
+  fi
+
+  cd "${PKGVAR}" || exit 1
+  KTV_PORT="${PORT}" \
+  KTV_HOST="${HOST}" \
+  KTV_DATA_DIR="${PKGVAR}" \
+  KTV_CACHE_DIR="${PKGVAR}/cache" \
+  KTV_FFMPEG="${APPDEST}/ffmpeg/ffmpeg" \
+  KTV_FFPROBE="${APPDEST}/ffmpeg/ffprobe" \
+  nohup "${NODE}" "${SERVER}" >> "${LOG}" 2>&1 &
+
+  echo $! > "${PIDF}"
+
+  local i=0
+  while [ "${i}" -lt 40 ]; do
+    if port_ready; then
+      echo "${APPNAME} started on ${HOST}:${PORT} (pid $(cat "${PIDF}"))"
+      return 0
+    fi
+    if ! is_running; then
+      fail_msg "ERROR: process exited during startup, see ${LOG}"
+      tail -n 30 "${LOG}" >> "${TRIM_TEMP_LOGFILE}" 2>/dev/null || true
+      rm -f "${PIDF}"
+      exit 1
+    fi
+    i=$((i + 1))
+    sleep 1
+  done
+
+  echo "WARN: ${APPNAME} process is running but port ${PORT} not ready within 40s, see ${LOG}" >&2
+  return 0
+}
+
+stop() {
+  if ! is_running; then
+    rm -f "${PIDF}"
+    echo "${APPNAME} is not running"
+    return 0
+  fi
+  local pid
+  pid=$(cat "${PIDF}")
+  kill -TERM "${pid}" 2>/dev/null || true
+
+  local i=0
+  while [ "${i}" -lt 15 ]; do
+    kill -0 "${pid}" 2>/dev/null || break
+    i=$((i + 1))
+    sleep 1
+  done
+
+  if kill -0 "${pid}" 2>/dev/null; then
+    kill -KILL "${pid}" 2>/dev/null || true
+  fi
+  rm -f "${PIDF}"
+
+  # 服务退出时可能有正在跑的 ffmpeg 子进程，一并清理
+  if command -v pkill >/dev/null 2>&1; then
+    pkill -f "${APPDEST}/ffmpeg/ffmpeg" 2>/dev/null || true
+  fi
+
+  echo "${APPNAME} stopped"
+  return 0
+}
+
+case "${1:-}" in
+  start) start ;;
+  stop) stop ;;
+  restart) stop; start ;;
+  status)
+    if is_running; then
+      echo "${APPNAME} is running (pid $(cat "${PIDF}"), port ${PORT})"
+      exit 0
+    fi
+    echo "${APPNAME} is not running"
+    exit 3
+    ;;
+  log)
+    tail -n "${2:-100}" "${LOG}" 2>/dev/null || echo "no log yet: ${LOG}"
+    exit 0
+    ;;
+  *)
+    echo "usage: $0 {start|stop|restart|status|log}" >&2
+    exit 2
+    ;;
+esac

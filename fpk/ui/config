@@ -1,0 +1,13 @@
+{
+  ".url": {
+    "ktv.Application": {
+      "title": "家庭KTV",
+      "icon": "images/icon_{0}.png",
+      "type": "url",
+      "protocol": "http",
+      "port": "9188",
+      "url": "/admin/",
+      "allUsers": true
+    }
+  }
+}

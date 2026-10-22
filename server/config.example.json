@@ -1,0 +1,8 @@
+{
+  "port": 9188,
+  "mediaDirs": [
+    "/vol1/1000/ktv歌库"
+  ],
+  "autoScanOnStart": true,
+  "roomName": "客厅"
+}

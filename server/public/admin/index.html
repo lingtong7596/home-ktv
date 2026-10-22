@@ -1,0 +1,794 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>家庭KTV 管理后台</title>
+<style>
+  :root {
+    --bg: #f4f6f8; --card: #fff; --line: #e4e8ec; --txt: #1f2933; --mut: #7b8794;
+    --acc: #0eaf6d; --acc-d: #0b8f59; --red: #e5484d; --amber: #f5a623; --pink: #ff4d6d;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { background: var(--bg); color: var(--txt); font: 14px/1.6 "PingFang SC", "Microsoft YaHei", sans-serif; }
+  header {
+    background: linear-gradient(135deg, #0b8f59, #0eaf6d); color: #fff; padding: 14px 22px;
+    display: flex; align-items: center; gap: 18px; flex-wrap: wrap; position: sticky; top: 0; z-index: 10;
+  }
+  header h1 { font-size: 18px; font-weight: 700; }
+  header .room { opacity: .9; }
+  header .counts { margin-left: auto; display: flex; gap: 14px; font-size: 12px; opacity: .92; }
+  header .counts a { color: #fff; text-decoration: none; border-bottom: 1px dotted rgba(255,255,255,.5); }
+  nav { display: flex; gap: 4px; width: 100%; }
+  nav button {
+    border: 0; background: rgba(255,255,255,.14); color: #fff; padding: 7px 18px; border-radius: 8px 8px 0 0;
+    cursor: pointer; font-size: 14px;
+  }
+  nav button.on { background: var(--bg); color: var(--acc-d); font-weight: 700; }
+  main { max-width: 1240px; margin: 18px auto; padding: 0 16px; }
+  section.panel { display: none; }
+  section.panel.on { display: block; }
+  .card { background: var(--card); border: 1px solid var(--line); border-radius: 12px; padding: 16px; margin-bottom: 14px; }
+  .row { display: flex; gap: 10px; flex-wrap: wrap; align-items: center; }
+  label.f { display: flex; flex-direction: column; gap: 3px; font-size: 12px; color: var(--mut); }
+  input, select, textarea {
+    border: 1px solid var(--line); border-radius: 8px; padding: 7px 10px; font-size: 14px; background: #fff; color: var(--txt);
+  }
+  input:focus, select:focus, textarea:focus { outline: 2px solid #9fe3c6; }
+  button.act {
+    border: 0; border-radius: 8px; padding: 8px 16px; cursor: pointer; font-size: 14px;
+    background: var(--acc); color: #fff;
+  }
+  button.act:hover { background: var(--acc-d); }
+  button.ghost { background: #fff; color: var(--txt); border: 1px solid var(--line); }
+  button.danger { background: #fff; color: var(--red); border: 1px solid #f6cdcd; }
+  button.danger:hover { background: #fdecec; }
+  button.mini { padding: 3px 10px; font-size: 12px; border-radius: 6px; }
+  table { width: 100%; border-collapse: collapse; font-size: 13px; }
+  th, td { text-align: left; padding: 8px 10px; border-bottom: 1px solid var(--line); white-space: nowrap; }
+  th { color: var(--mut); font-weight: 600; background: #fafbfc; position: sticky; top: 0; z-index: 2; }
+  td.ell, th.ell { max-width: 240px; overflow: hidden; text-overflow: ellipsis; }
+  tr:hover td { background: #f6fbf8; }
+  tr.picked td { background: #eef9f3; }
+  .tag { display: inline-block; padding: 1px 8px; border-radius: 10px; font-size: 12px; background: #e8f7f0; color: var(--acc-d); }
+  .tag.off { background: #fdecec; color: var(--red); }
+  .tag.gray { background: #eef1f4; color: var(--mut); }
+  .tag.fav { background: #fff0f3; color: var(--pink); }
+  .pager { display: flex; gap: 10px; align-items: center; justify-content: flex-end; padding-top: 10px; font-size: 13px; color: var(--mut); }
+  .letters { display: flex; flex-wrap: wrap; gap: 4px; margin: 8px 0; }
+  .letters button {
+    min-width: 30px; height: 28px; border: 1px solid var(--line); background: #fff; border-radius: 6px; cursor: pointer; font-size: 12px;
+  }
+  .letters button.on { background: var(--acc); color: #fff; border-color: var(--acc); }
+  .avatar { width: 36px; height: 36px; border-radius: 50%; object-fit: cover; background: #eef1f4; display: block; }
+  .bar { height: 10px; background: #e8ecef; border-radius: 6px; overflow: hidden; }
+  .bar > i { display: block; height: 100%; background: var(--acc); width: 0; transition: width .3s; }
+  #curFile { font-size: 16px; font-weight: 600; color: var(--txt); min-height: 24px; word-break: break-all; }
+  #impLog { height: 180px; overflow: auto; background: #0f172a; color: #9fe3c6; font: 12px/1.7 Consolas, monospace; border-radius: 8px; padding: 10px; }
+  .toast {
+    position: fixed; left: 50%; bottom: 34px; transform: translateX(-50%); background: #1f2933; color: #fff;
+    padding: 9px 20px; border-radius: 10px; opacity: 0; transition: .25s; pointer-events: none; z-index: 99;
+  }
+  .toast.show { opacity: .95; }
+  dialog { border: 1px solid var(--line); border-radius: 12px; padding: 20px; min-width: 380px; }
+  dialog::backdrop { background: rgba(0,0,0,.35); }
+  .stat3 { display: flex; gap: 12px; flex-wrap: wrap; }
+  .stat3 div { flex: 1; min-width: 130px; background: #f6fbf8; border: 1px solid var(--line); border-radius: 10px; padding: 10px 14px; }
+  .stat3 b { font-size: 20px; color: var(--acc-d); display: block; }
+  .hint { color: var(--mut); font-size: 12px; }
+  .warn { color: var(--amber); font-size: 12px; }
+  .batchbar {
+    position: sticky; top: 0; z-index: 5; display: none; align-items: center; gap: 8px; flex-wrap: wrap;
+    background: #0f172a; color: #fff; border-radius: 10px; padding: 10px 14px; margin-bottom: 12px;
+  }
+  .batchbar.show { display: flex; }
+  .batchbar b { color: #7ce8b5; }
+  .batchbar button { border: 0; border-radius: 7px; padding: 6px 12px; cursor: pointer; font-size: 13px; background: rgba(255,255,255,.14); color: #fff; }
+  .batchbar button:hover { background: rgba(255,255,255,.26); }
+  .batchbar button.hot { background: var(--pink); }
+  .batchbar button.warnbtn { background: #e5484d; }
+  .batchbar .sp { flex: 1; }
+</style>
+</head>
+<body>
+<header>
+  <h1>🎤 家庭KTV 管理后台</h1>
+  <span class="room" id="hRoom"></span>
+  <div class="counts">
+    <span>歌曲 <b id="hSongs">0</b></span>
+    <span>歌手 <b id="hArtists">0</b></span>
+    <span>收藏 <b id="hFavs">0</b></span>
+    <span id="hScan" class="tag gray">空闲</span>
+    <a href="/" target="_blank">投屏页 ↗</a>
+    <a href="/m/" target="_blank">点歌台 ↗</a>
+  </div>
+  <nav>
+    <button data-tab="songs" class="on">歌曲管理</button>
+    <button data-tab="artists">歌手管理</button>
+    <button data-tab="favs">收藏夹</button>
+    <button data-tab="import">批量导入</button>
+    <button data-tab="settings">系统设置</button>
+  </nav>
+</header>
+
+<main>
+  <!-- ============ 歌曲管理 ============ -->
+  <section class="panel on" id="tab-songs">
+    <div class="card">
+      <div class="row">
+        <label class="f">歌名 / 拼音 / 首字母<input id="fq" placeholder="如：晴天 / qt / zjlqt" size="20" /></label>
+        <label class="f">歌手<input id="fartist" placeholder="歌手名" size="11" /></label>
+        <label class="f">语种<select id="flang"><option value="">全部</option></select></label>
+        <label class="f">类型<select id="ftype"><option value="">全部</option></select></label>
+        <label class="f">状态<select id="fstatus">
+          <option value="enabled">启用</option><option value="disabled">停用</option><option value="all">全部</option>
+        </select></label>
+        <label class="f">只看<select id="ffav">
+          <option value="">全部</option><option value="fav">已收藏</option>
+        </select></label>
+        <button class="act" id="btnSearch">查 询</button>
+        <button class="ghost" id="btnReset">清空</button>
+      </div>
+      <div class="letters" id="sLetters"></div>
+      <p class="hint">勾选左侧方框后可批量操作：一次收藏、一次加入已点、一次停用或从曲库移除。筛选"周杰伦"再点全选，就能把整个歌手的歌加进收藏。</p>
+    </div>
+
+    <div class="batchbar" id="batchBar">
+      <span>已选 <b id="batchCount">0</b> 首</span>
+      <button class="hot" data-batch="fav">❤️ 加入收藏</button>
+      <button data-batch="unfav">取消收藏</button>
+      <button data-batch="queue">🎵 加入已点</button>
+      <button data-batch="shuffleQueue">🔀 打乱后加入</button>
+      <button data-batch="disable">停用</button>
+      <button data-batch="enable">启用</button>
+      <button class="warnbtn" data-batch="remove">从曲库移除</button>
+      <span class="sp"></span>
+      <button data-batch="clear">取消选择</button>
+    </div>
+
+    <div class="card">
+      <table>
+        <thead><tr>
+          <th style="width:34px"><input type="checkbox" id="checkAll" /></th>
+          <th class="ell">歌名</th><th class="ell">歌手</th><th>语种</th><th>类型</th>
+          <th>音轨</th><th>点唱</th><th class="ell">文件</th><th>状态</th><th>操作</th>
+        </tr></thead>
+        <tbody id="songRows"><tr><td colspan="10" class="hint">加载中…</td></tr></tbody>
+      </table>
+      <div class="pager">
+        <span id="songInfo"></span>
+        <button class="ghost mini" id="songPrev">上一页</button>
+        <button class="ghost mini" id="songNext">下一页</button>
+      </div>
+    </div>
+  </section>
+
+  <!-- ============ 歌手管理 ============ -->
+  <section class="panel" id="tab-artists">
+    <div class="card">
+      <div class="row">
+        <label class="f">歌手 / 拼音<input id="aq" size="18" placeholder="如：周杰伦 / zjl" /></label>
+        <label class="f">地区<select id="aregion">
+          <option value="">全部</option>
+          <option>大陆</option><option>台湾</option><option>香港</option><option>澳门</option><option>外国</option><option>其他</option>
+        </select></label>
+        <label class="f">性别/组合<select id="agender">
+          <option value="">全部</option><option>男</option><option>女</option><option>组合</option>
+        </select></label>
+        <button class="act" id="btnASearch">查 询</button>
+        <button class="ghost" id="btnARebuild">从曲库重建歌手</button>
+      </div>
+      <div class="letters" id="aLetters"></div>
+      <p class="hint">提示：地区 / 性别下拉修改后自动保存；点「上传头像」选择本地图片（jpg/png，≤5MB）。</p>
+    </div>
+    <div class="card">
+      <table>
+        <thead><tr>
+          <th>头像</th><th class="ell">歌手</th><th>地区</th><th>性别</th><th>拼音</th><th>首字母</th><th>歌曲数</th><th>点唱</th><th>操作</th>
+        </tr></thead>
+        <tbody id="artistRows"><tr><td colspan="9" class="hint">加载中…</td></tr></tbody>
+      </table>
+      <div class="pager">
+        <span id="artistInfo"></span>
+        <button class="ghost mini" id="artistPrev">上一页</button>
+        <button class="ghost mini" id="artistNext">下一页</button>
+      </div>
+    </div>
+  </section>
+
+  <!-- ============ 收藏夹 ============ -->
+  <section class="panel" id="tab-favs">
+    <div class="card">
+      <div class="row">
+        <b style="font-size:16px">❤️ 收藏夹</b>
+        <span class="hint" id="favInfo">共 0 首</span>
+        <span style="flex:1"></span>
+        <button class="act" id="favQueueAll">全部加入已点</button>
+        <button class="ghost" id="favQueueShuffle">🔀 打乱后加入</button>
+        <button class="danger" id="favClearAll">清空收藏</button>
+      </div>
+      <p class="hint">和手机端、投影仪端的收藏是同一份数据：这里取消收藏，客厅屏幕上也会同步消失。</p>
+    </div>
+    <div class="card">
+      <table>
+        <thead><tr>
+          <th class="ell">歌名</th><th class="ell">歌手</th><th>语种</th><th>类型</th><th>点唱</th><th>操作</th>
+        </tr></thead>
+        <tbody id="favRows"><tr><td colspan="6" class="hint">加载中…</td></tr></tbody>
+      </table>
+    </div>
+  </section>
+
+  <!-- ============ 批量导入 ============ -->
+  <section class="panel" id="tab-import">
+    <div class="card">
+      <label class="f" style="width:100%">曲库目录（每行一个，支持多个；本地盘 + 网盘可混用）
+        <textarea id="impDirs" rows="4" style="width:100%;font-family:Consolas,monospace"></textarea>
+      </label>
+      <div class="row" style="margin-top:10px">
+        <label class="f">命名方式<select id="impOrder">
+          <option value="artist-title">歌手-歌名-语种-类型</option>
+          <option value="title-artist">歌名-歌手-语种-类型</option>
+        </select></label>
+        <label class="row" style="gap:6px"><input type="checkbox" id="impDeep" /> <span>同时读取音轨信息</span></label>
+        <span class="warn">⚠️ 网盘曲库建议不勾选：扫描只解析文件名（分钟级），音轨信息在点唱时按需补读，最大限度减少网盘读取。</span>
+      </div>
+      <div class="row" style="margin-top:12px">
+        <button class="act" id="btnScan">开始扫描导入</button>
+        <button class="ghost" id="btnSaveDirs">保存目录</button>
+        <span class="hint" id="impStats"></span>
+      </div>
+    </div>
+    <div class="card">
+      <div class="row"><b>当前处理</b><span id="curFile" class="hint">—</span></div>
+      <div class="bar" style="margin:10px 0"><i id="impBar"></i></div>
+      <div class="row"><span id="impMsg" class="hint">尚未开始扫描</span></div>
+      <div id="impLog" style="margin-top:10px"></div>
+    </div>
+  </section>
+
+  <!-- ============ 系统设置 ============ -->
+  <section class="panel" id="tab-settings">
+    <div class="card">
+      <div class="row">
+        <label class="f">房间名称<input id="sRoom" size="12" /></label>
+        <label class="f">空闲自动播放<select id="sAuto">
+          <option value="off">关闭</option>
+          <option value="random">随机播放曲库歌曲</option>
+          <option value="favs">随机播放收藏歌曲</option>
+        </select></label>
+        <label class="row" style="gap:6px"><input type="checkbox" id="sNoRepeat" /> 禁止重复点歌</label>
+        <label class="row" style="gap:6px"><input type="checkbox" id="sPrewarm" /> 点歌即后台预热（切歌零等待）</label>
+      </div>
+      <p class="hint">预热：歌曲一进"已点"，就在后台把文件头读好、需要时把兼容流备好；上一首唱完时下一首已经就绪。网盘带宽有限可以关掉。</p>
+      <div class="row" style="margin-top:10px">
+        <label class="f">原唱音轨号<input id="sOrig" type="number" min="0" max="9" style="width:80px" /></label>
+        <label class="f">伴唱音轨号<input id="sAcc" type="number" min="0" max="9" style="width:80px" /></label>
+        <label class="row" style="gap:6px"><input type="checkbox" id="sRemux" /> 播放兼容处理（推荐开启）</label>
+        <span class="warn">MP2 音频在投影仪/浏览器上解不了，开启后首次点唱自动换封装：<b>视频不转码</b>，仅音频转 AAC，之后秒开。</span>
+      </div>
+      <div class="row" style="margin-top:10px">
+        <button class="act" id="btnSaveSettings">保存设置</button>
+      </div>
+    </div>
+    <div class="card">
+      <div class="stat3">
+        <div><b id="stSongs">0</b>歌曲总数</div>
+        <div><b id="stArtists">0</b>歌手总数</div>
+        <div><b id="stFavs">0</b>收藏数量</div>
+        <div><b id="stCache">0</b>兼容缓存</div>
+      </div>
+      <div class="row" style="margin-top:12px">
+        <button class="ghost" id="btnClearCache">清理兼容缓存</button>
+        <button class="ghost" id="btnRestoreRemoved">恢复被移除的歌曲（<span id="stRemoved">0</span>）</button>
+        <span class="hint" id="svcInfo"></span>
+      </div>
+      <p class="hint">「从曲库移除」只删索引、不动 NAS 上的视频文件；恢复后重新扫描即可再收回来。</p>
+    </div>
+  </section>
+</main>
+
+<dialog id="editDlg">
+  <h3 style="margin-bottom:12px">修改歌曲信息</h3>
+  <div class="row" style="flex-direction:column;align-items:stretch;gap:10px">
+    <label class="f">歌名<input id="eTitle" /></label>
+    <label class="f">歌手<input id="eArtist" /></label>
+    <label class="f">语种<input id="eLang" placeholder="国语 / 粤语 / 英语 …" /></label>
+    <label class="f">类型<input id="eType" placeholder="流行 / 合唱 / …" /></label>
+  </div>
+  <div class="row" style="margin-top:16px;justify-content:flex-end">
+    <button class="ghost" id="eCancel">取消</button>
+    <button class="act" id="eSave">保存</button>
+  </div>
+</dialog>
+
+<div class="toast" id="toast"></div>
+
+<script>
+/* ================= 基础 ================= */
+const $ = (s) => document.querySelector(s);
+const esc = (t) => String(t ?? '').replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
+
+function toast(text) {
+  const el = $('#toast');
+  el.textContent = text;
+  el.classList.add('show');
+  clearTimeout(el._t);
+  el._t = setTimeout(() => el.classList.remove('show'), 2200);
+}
+
+async function api(path, opts = {}) {
+  const res = await fetch(path, opts);
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok) throw new Error(data.error || res.statusText);
+  return data;
+}
+const post = (p, body) => api(p, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body || {}) });
+
+function switchTab(name) {
+  document.querySelector('nav button[data-tab="' + name + '"]').click();
+}
+
+document.querySelectorAll('nav button').forEach((btn) => {
+  btn.onclick = () => {
+    document.querySelectorAll('nav button').forEach((b) => b.classList.toggle('on', b === btn));
+    document.querySelectorAll('section.panel').forEach((p) => p.classList.toggle('on', p.id === 'tab-' + btn.dataset.tab));
+    if (btn.dataset.tab === 'artists') loadArtists();
+    if (btn.dataset.tab === 'favs') loadFavs();
+    if (btn.dataset.tab === 'import') loadImportCfg();
+    if (btn.dataset.tab === 'settings') loadSettings();
+  };
+});
+
+/* ================= 歌曲管理 ================= */
+const songState = { offset: 0, limit: 40, total: 0, editId: null, letter: '' };
+const picked = new Set();
+
+function syncBatchBar() {
+  $('#batchCount').textContent = picked.size;
+  $('#batchBar').classList.toggle('show', picked.size > 0);
+}
+
+async function loadSongs() {
+  const p = new URLSearchParams({
+    q: $('#fq').value.trim(),
+    artist: $('#fartist').value.trim(),
+    lang: $('#flang').value,
+    type: $('#ftype').value,
+    status: $('#fstatus').value,
+    fav: $('#ffav').value === 'fav' ? '1' : '',
+    letter: songState.letter,
+    limit: songState.limit,
+    offset: songState.offset,
+  });
+  const r = await api('/api/songs?' + p);
+  const items = r.items;
+  songState.total = r.total;
+  $('#songInfo').textContent = r.total
+    ? (songState.offset + 1) + '-' + Math.min(songState.offset + r.items.length, r.total) + ' / 共 ' + r.total + ' 首'
+    : '共 0 首';
+  $('#songRows').innerHTML = items.length
+    ? items.map((s) => '<tr data-id="' + s.id + '" class="' + (picked.has(s.id) ? 'picked' : '') + '">' +
+        '<td><input type="checkbox" class="pick" ' + (picked.has(s.id) ? 'checked' : '') + ' /></td>' +
+        '<td class="ell">' + esc(s.title) + (s.fav ? ' <span class="tag fav">❤</span>' : '') + '</td>' +
+        '<td class="ell">' + esc(s.artist) + '</td>' +
+        '<td>' + esc(s.lang || '—') + '</td>' +
+        '<td>' + esc(s.type || '—') + '</td>' +
+        '<td>' + (s.trackCount > 1 ? s.trackCount + '条' : '单轨') + '</td>' +
+        '<td>' + s.plays + '</td>' +
+        '<td class="ell hint">' + esc(s.rel || '') + '</td>' +
+        '<td>' + (s.disabled ? '<span class="tag off">停用</span>' : '<span class="tag">启用</span>') + '</td>' +
+        '<td>' +
+          '<button class="ghost mini" data-act="edit">修改</button> ' +
+          '<button class="ghost mini" data-act="toggle">' + (s.disabled ? '启用' : '停用') + '</button> ' +
+          '<button class="ghost mini" data-act="play">播放</button>' +
+        '</td></tr>').join('')
+    : '<tr><td colspan="10" class="hint">没有符合条件的歌曲</td></tr>';
+  syncBatchBar();
+  syncCheckAll();
+}
+
+function syncCheckAll() {
+  const boxes = [...document.querySelectorAll('#songRows .pick')];
+  const on = boxes.filter((b) => b.checked).length;
+  $('#checkAll').checked = boxes.length > 0 && on === boxes.length;
+  $('#checkAll').indeterminate = on > 0 && on < boxes.length;
+}
+
+$('#songRows').addEventListener('click', async (e) => {
+  const box = e.target.closest('input.pick');
+  if (box) {
+    const tr = box.closest('tr');
+    if (box.checked) picked.add(tr.dataset.id); else picked.delete(tr.dataset.id);
+    tr.classList.toggle('picked', box.checked);
+    syncBatchBar();
+    syncCheckAll();
+    return;
+  }
+  const btn = e.target.closest('button[data-act]');
+  if (!btn) return;
+  const id = btn.closest('tr').dataset.id;
+  const act = btn.dataset.act;
+  if (act === 'play') { window.open('/stream/' + id + '?raw=1', '_blank'); return; }
+  if (act === 'toggle') {
+    const disabled = btn.textContent.trim() === '停用';
+    await post('/api/songs/' + id + '/disable', { disabled });
+    toast(disabled ? '已停用' : '已启用');
+    loadSongs();
+    return;
+  }
+  if (act === 'edit') {
+    const tds = btn.closest('tr').querySelectorAll('td');
+    songState.editId = id;
+    $('#eTitle').value = tds[1].textContent.replace(' ❤', '').trim();
+    $('#eArtist').value = tds[2].textContent;
+    $('#eLang').value = tds[3].textContent === '—' ? '' : tds[3].textContent;
+    $('#eType').value = tds[4].textContent === '—' ? '' : tds[4].textContent;
+    $('#editDlg').showModal();
+  }
+});
+
+$('#checkAll').onchange = (e) => {
+  document.querySelectorAll('#songRows .pick').forEach((b) => {
+    b.checked = e.target.checked;
+    const tr = b.closest('tr');
+    if (b.checked) picked.add(tr.dataset.id); else picked.delete(tr.dataset.id);
+    tr.classList.toggle('picked', b.checked);
+  });
+  syncBatchBar();
+};
+
+$('#batchBar').addEventListener('click', async (e) => {
+  const btn = e.target.closest('button[data-batch]');
+  if (!btn) return;
+  const action = btn.dataset.batch;
+  if (action === 'clear') {
+    picked.clear();
+    document.querySelectorAll('#songRows .pick').forEach((b) => { b.checked = false; b.closest('tr').classList.remove('picked'); });
+    syncBatchBar();
+    syncCheckAll();
+    return;
+  }
+  const ids = [...picked];
+  if (action === 'remove' && !confirm('从曲库移除这 ' + ids.length + ' 首歌？\n（只删索引，NAS 上的视频文件不会被删除）')) return;
+  const serverAction = action === 'shuffleQueue' ? 'enqueueRandom' : action;
+  const r = await post('/api/songs/batch', { ids, action: serverAction });
+  const label = { fav: '已收藏', unfav: '已取消收藏', queue: '已加入已点', shuffleQueue: '已打乱加入', disable: '已停用', enable: '已启用', remove: '已移除' }[action] || '完成';
+  toast(label + ' ' + r.affected + ' 首');
+  if (action === 'remove') picked.clear();
+  loadSongs();
+  refreshCounts();
+});
+
+$('#eCancel').onclick = () => $('#editDlg').close();
+$('#eSave').onclick = async () => {
+  await post('/api/songs/' + songState.editId + '/edit', {
+    title: $('#eTitle').value, artist: $('#eArtist').value,
+    lang: $('#eLang').value, type: $('#eType').value,
+  });
+  $('#editDlg').close();
+  toast('已保存');
+  loadSongs();
+};
+
+$('#btnSearch').onclick = () => { songState.offset = 0; loadSongs(); };
+$('#btnReset').onclick = () => {
+  $('#fq').value = ''; $('#fartist').value = ''; $('#flang').value = ''; $('#ftype').value = '';
+  $('#fstatus').value = 'enabled'; $('#ffav').value = ''; songState.letter = '';
+  document.querySelectorAll('#sLetters button').forEach((b, i) => b.classList.toggle('on', i === 0));
+  picked.clear();
+  songState.offset = 0;
+  loadSongs();
+};
+$('#fq').addEventListener('keydown', (e) => { if (e.key === 'Enter') $('#btnSearch').click(); });
+$('#fartist').addEventListener('keydown', (e) => { if (e.key === 'Enter') $('#btnSearch').click(); });
+$('#ffav').addEventListener('change', () => { songState.offset = 0; loadSongs(); });
+$('#songPrev').onclick = () => { songState.offset = Math.max(0, songState.offset - songState.limit); loadSongs(); };
+$('#songNext').onclick = () => { songState.offset += songState.limit; loadSongs(); };
+
+// 歌名字母条
+const LETTERS = [...'ABCDEFGHIJKLMNOPQRSTUVWXYZ', '#'];
+$('#sLetters').innerHTML = '<button class="on" data-l="">全部</button>' +
+  LETTERS.map((l) => '<button data-l="' + l + '">' + l + '</button>').join('');
+$('#sLetters').addEventListener('click', (e) => {
+  const b = e.target.closest('button[data-l]');
+  if (!b) return;
+  songState.letter = b.dataset.l;
+  songState.offset = 0;
+  document.querySelectorAll('#sLetters button').forEach((x) => x.classList.toggle('on', x === b));
+  loadSongs();
+});
+
+/* ================= 歌手管理 ================= */
+const artistState = { offset: 0, limit: 40, total: 0, letter: '' };
+const REGIONS = ['大陆', '台湾', '香港', '澳门', '外国', '其他'];
+const GENDERS = ['男', '女', '组合'];
+
+async function loadArtists() {
+  const p = new URLSearchParams({
+    q: $('#aq').value.trim(),
+    region: $('#aregion').value,
+    gender: $('#agender').value,
+    letter: artistState.letter,
+    limit: artistState.limit,
+    offset: artistState.offset,
+  });
+  const r = await api('/api/artists?' + p);
+  artistState.total = r.total;
+  $('#artistInfo').textContent = '共 ' + r.total + ' 位';
+  $('#artistRows').innerHTML = r.items.length
+    ? r.items.map((a) => '<tr data-id="' + a.id + '" data-name="' + esc(a.name) + '">' +
+        '<td><img class="avatar" loading="lazy" src="/api/artists/' + a.id + '/avatar?v=' + (a.hasAvatar ? 1 : 0) + '" onerror="this.onerror=null;this.src=\'/api/avatar-placeholder.svg?name=' + encodeURIComponent(a.name) + '\'"/></td>' +
+        '<td class="ell">' + esc(a.name) + '</td>' +
+        '<td><select data-f="region">' + ['<option value="">—</option>'].concat(REGIONS.map((x) => '<option ' + (a.region === x ? 'selected' : '') + '>' + x + '</option>')).join('') + '</select></td>' +
+        '<td><select data-f="gender">' + ['<option value="">—</option>'].concat(GENDERS.map((x) => '<option ' + (a.gender === x ? 'selected' : '') + '>' + x + '</option>')).join('') + '</select></td>' +
+        '<td class="ell hint">' + esc(a.py) + '</td>' +
+        '<td>' + esc((a.init || '?').toUpperCase()[0]) + '</td>' +
+        '<td>' + a.count + '</td>' +
+        '<td>' + (a.plays || 0) + '</td>' +
+        '<td>' +
+          '<button class="ghost mini" data-act="avatar">上传头像</button> ' +
+          '<button class="ghost mini" data-act="songs">查看歌曲</button>' +
+        '</td></tr>').join('')
+    : '<tr><td colspan="9" class="hint">没有符合条件的歌手</td></tr>';
+}
+
+$('#artistRows').addEventListener('change', async (e) => {
+  const sel = e.target.closest('select[data-f]');
+  if (!sel) return;
+  const tr = sel.closest('tr');
+  const body = {};
+  body[sel.dataset.f] = sel.value;
+  await post('/api/artists/' + tr.dataset.id, body);
+  toast('已保存');
+});
+
+$('#artistRows').addEventListener('click', (e) => {
+  const btn = e.target.closest('button[data-act]');
+  if (!btn) return;
+  const tr = btn.closest('tr');
+  const id = tr.dataset.id;
+  if (btn.dataset.act === 'avatar') {
+    const input = document.createElement('input');
+    input.type = 'file';
+    input.accept = 'image/jpeg,image/png,image/webp';
+    input.onchange = async () => {
+      const file = input.files[0];
+      if (!file) return;
+      if (file.size > 5 * 1024 * 1024) return toast('图片超过 5MB');
+      const buf = await file.arrayBuffer();
+      await api('/api/artists/' + id + '/avatar', { method: 'POST', body: buf, headers: { 'Content-Type': file.type } });
+      toast('头像已更新');
+      loadArtists();
+    };
+    input.click();
+    return;
+  }
+  if (btn.dataset.act === 'songs') {
+    switchTab('songs');
+    $('#fartist').value = tr.dataset.name;
+    $('#fq').value = '';
+    $('#ffav').value = '';
+    picked.clear();
+    songState.offset = 0;
+    loadSongs();
+  }
+});
+
+$('#aLetters').innerHTML = '<button class="' + (artistState.letter ? '' : 'on') + '" data-l="">全部</button>' +
+  LETTERS.map((l) => '<button data-l="' + l + '">' + l + '</button>').join('');
+$('#aLetters').addEventListener('click', (e) => {
+  const b = e.target.closest('button[data-l]');
+  if (!b) return;
+  artistState.letter = b.dataset.l;
+  artistState.offset = 0;
+  document.querySelectorAll('#aLetters button').forEach((x) => x.classList.toggle('on', x === b));
+  loadArtists();
+});
+
+$('#btnASearch').onclick = () => { artistState.offset = 0; loadArtists(); };
+$('#btnARebuild').onclick = async () => {
+  const r = await post('/api/artists/rebuild');
+  toast('已重建，共 ' + r.total + ' 位歌手');
+  loadArtists();
+};
+$('#artistPrev').onclick = () => { artistState.offset = Math.max(0, artistState.offset - artistState.limit); loadArtists(); };
+$('#artistNext').onclick = () => { artistState.offset += artistState.limit; loadArtists(); };
+
+/* ================= 收藏夹 ================= */
+async function loadFavs() {
+  const r = await api('/api/favs');
+  $('#favInfo').textContent = '共 ' + r.items.length + ' 首';
+  $('#hFavs').textContent = r.items.length;
+  $('#favRows').innerHTML = r.items.length
+    ? r.items.map((s) => '<tr data-id="' + s.id + '">' +
+        '<td class="ell">' + esc(s.title) + '</td>' +
+        '<td class="ell">' + esc(s.artist) + '</td>' +
+        '<td>' + esc(s.lang || '—') + '</td>' +
+        '<td>' + esc(s.type || '—') + '</td>' +
+        '<td>' + s.plays + '</td>' +
+        '<td><button class="ghost mini" data-act="queue">点歌</button> ' +
+            '<button class="ghost mini" data-act="unfav">取消收藏</button></td></tr>').join('')
+    : '<tr><td colspan="6" class="hint">还没有收藏。在歌曲管理里勾选后点「加入收藏」，或在手机/投影仪上点 ♥</td></tr>';
+}
+
+$('#favRows').addEventListener('click', async (e) => {
+  const btn = e.target.closest('button[data-act]');
+  if (!btn) return;
+  const id = btn.closest('tr').dataset.id;
+  if (btn.dataset.act === 'queue') {
+    try { await post('/api/queue', { songId: id, by: '后台' }); toast('已加入已点'); }
+    catch (err) { toast(err.message); }
+    return;
+  }
+  if (btn.dataset.act === 'unfav') {
+    await post('/api/favs/toggle', { songId: id });
+    toast('已取消收藏');
+    loadFavs();
+  }
+});
+
+$('#favQueueAll').onclick = async () => {
+  const r = await api('/api/favs');
+  if (!r.items.length) return toast('还没有收藏');
+  const res = await post('/api/queue', { songIds: r.items.map((s) => s.id), by: '收藏夹' });
+  toast('已加入 ' + (res.results || []).filter((x) => x.ok).length + ' 首到已点');
+};
+$('#favQueueShuffle').onclick = async () => {
+  const r = await api('/api/favs');
+  if (!r.items.length) return toast('还没有收藏');
+  const ids = r.items.map((s) => s.id).sort(() => Math.random() - 0.5);
+  const res = await post('/api/queue', { songIds: ids, by: '收藏夹' });
+  toast('已打乱加入 ' + (res.results || []).filter((x) => x.ok).length + ' 首');
+};
+$('#favClearAll').onclick = async () => {
+  if (!confirm('确定清空所有收藏？')) return;
+  await post('/api/favs/clear');
+  toast('收藏已清空');
+  loadFavs();
+};
+
+/* ================= 批量导入 ================= */
+function logLine(text) {
+  const box = $('#impLog');
+  const div = document.createElement('div');
+  div.textContent = '[' + new Date().toLocaleTimeString('zh-CN', { hour12: false }) + '] ' + text;
+  box.prepend(div);
+  while (box.children.length > 200) box.lastChild.remove();
+}
+
+async function loadImportCfg() {
+  const [cfg, scan] = await Promise.all([api('/api/settings'), api('/api/scan/status')]);
+  $('#impDirs').value = (cfg.mediaDirs || []).join('\n');
+  $('#impOrder').value = cfg.filenameOrder || 'artist-title';
+  $('#impDeep').checked = !!cfg.deepScan;
+  applyScanState(scan);
+}
+
+function applyScanState(scan) {
+  const p = scan.progress || {};
+  const running = !!scan.running;
+  $('#hScan').textContent = running ? '扫描中' : '空闲';
+  $('#hScan').className = running ? 'tag' : 'tag gray';
+  if (running || p.phase === 'done' || p.phase === 'error') {
+    if (p.current) $('#curFile').textContent = ((p.currentArtist || '') + ' - ' + (p.currentTitle || '')).trim() || p.current;
+    else if (p.message) $('#curFile').textContent = p.message;
+    const pct = p.total ? Math.round((p.done / p.total) * 100) : 0;
+    $('#impBar').style.width = pct + '%';
+    $('#impMsg').textContent = running
+      ? (p.message || '') + '（' + pct + '%）'
+      : (p.message || (p.phase === 'done' ? '扫描完成' : ''));
+    if (running && p.phase === 'scan') logLine(p.message || p.current || '');
+  }
+}
+
+$('#btnSaveDirs').onclick = async () => {
+  const dirs = $('#impDirs').value.split('\n').map((s) => s.trim()).filter(Boolean);
+  await post('/api/settings', { mediaDirs: dirs });
+  toast('曲库目录已保存');
+};
+
+$('#btnScan').onclick = async () => {
+  const dirs = $('#impDirs').value.split('\n').map((s) => s.trim()).filter(Boolean);
+  if (!dirs.length) return toast('请先填写曲库目录');
+  await post('/api/settings', { mediaDirs: dirs });
+  const r = await post('/api/scan', { filenameOrder: $('#impOrder').value, deepScan: $('#impDeep').checked });
+  if (!r.started) return toast(r.reason || '未能开始扫描');
+  toast('扫描已开始');
+  logLine('扫描开始：' + dirs.join(' , '));
+};
+
+/* ================= 系统设置 ================= */
+async function loadSettings() {
+  const [cfg, health, favs] = await Promise.all([api('/api/settings'), api('/api/health'), api('/api/favs')]);
+  $('#sRoom').value = cfg.roomName || '';
+  $('#sAuto').value = cfg.autoplayMode || 'off';
+  $('#sNoRepeat').checked = !!cfg.noRepeat;
+  $('#sPrewarm').checked = !!cfg.prewarm;
+  $('#sRemux').checked = !!cfg.allowRemux;
+  $('#sOrig').value = cfg.originalTrack ?? 0;
+  $('#sAcc').value = cfg.accompanimentTrack ?? 1;
+  $('#stSongs').textContent = health.library.total;
+  $('#stCache').textContent = health.remuxCache && health.remuxCache.sizeGB != null ? health.remuxCache.sizeGB + 'GB' : '0';
+  $('#stRemoved').textContent = cfg.removedCount || 0;
+  $('#stFavs').textContent = favs.items.length;
+  $('#svcInfo').textContent = '版本 ' + health.version;
+  api('/api/artists?limit=1').then((r) => { $('#stArtists').textContent = r.total; });
+}
+
+$('#btnSaveSettings').onclick = async () => {
+  await post('/api/settings', {
+    roomName: $('#sRoom').value,
+    autoplayMode: $('#sAuto').value,
+    noRepeat: $('#sNoRepeat').checked,
+    prewarm: $('#sPrewarm').checked,
+    allowRemux: $('#sRemux').checked,
+    originalTrack: Number($('#sOrig').value) || 0,
+    accompanimentTrack: Number($('#sAcc').value) || 1,
+  });
+  toast('设置已保存');
+};
+
+$('#btnClearCache').onclick = async () => {
+  await post('/api/admin/cache/clear');
+  toast('缓存已清理');
+  loadSettings();
+};
+$('#btnRestoreRemoved').onclick = async () => {
+  const r = await post('/api/songs/restore-removed');
+  toast('已恢复 ' + r.restored + ' 首，重新扫描后回来');
+  loadSettings();
+};
+
+/* ================= 全局 ================= */
+async function loadFacets() {
+  const r = await api('/api/facets');
+  const mk = (sel, list, key) => {
+    const el = $(sel);
+    el.innerHTML = '<option value="">全部</option>' +
+      list.map((x) => '<option value="' + esc(x[key]) + '">' + esc(x[key]) + '（' + x.count + '）</option>').join('');
+    el.onchange = () => { songState.offset = 0; loadSongs(); };
+  };
+  mk('#flang', r.langs || [], 'lang');
+  mk('#ftype', r.types || [], 'type');
+}
+
+async function refreshCounts() {
+  try {
+    const [health, artists, favs] = await Promise.all([api('/api/health'), api('/api/artists?limit=1'), api('/api/favs')]);
+    $('#hSongs').textContent = health.library.total;
+    $('#hArtists').textContent = artists.total;
+    $('#hFavs').textContent = favs.items.length;
+  } catch {}
+}
+
+async function boot() {
+  try {
+    const [health] = await Promise.all([api('/api/health')]);
+    $('#hRoom').textContent = '房间：' + (health.room || '');
+    await refreshCounts();
+    await loadFacets();
+    await loadSongs();
+    loadImportCfg();
+  } catch (err) {
+    toast('加载失败：' + err.message);
+  }
+
+  // 扫描进度实时推送
+  const es = new EventSource('/api/events?role=admin');
+  es.addEventListener('scan', (e) => applyScanState(JSON.parse(e.data)));
+  es.addEventListener('library', async () => {
+    refreshCounts();
+    await loadFacets();
+    loadSongs();
+  });
+  es.addEventListener('toast', (e) => {
+    const d = JSON.parse(e.data);
+    logLine(d.text || '');
+  });
+}
+
+boot();
+</script>
+</body>
+</html>

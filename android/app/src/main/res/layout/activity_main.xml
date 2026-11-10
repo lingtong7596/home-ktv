@@ -349,6 +349,42 @@
         </LinearLayout>
     </LinearLayout>
 
+    <!-- 播放时右上角常驻：二维码 + 快捷键速查（整体半透明的"贴图"，尽量少遮挡画面） -->
+    <LinearLayout
+        android:id="@+id/playOverlay"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_gravity="top|end"
+        android:gravity="center_horizontal"
+        android:orientation="vertical"
+        android:padding="14dp"
+        android:alpha="0.8"
+        android:visibility="gone">
+
+        <ImageView
+            android:id="@+id/qrPlay"
+            android:layout_width="112dp"
+            android:layout_height="112dp"
+            android:background="#e6ffffff"
+            android:contentDescription="手机扫码点歌"
+            android:padding="6dp" />
+
+        <TextView
+            android:id="@+id/playKeyHelp"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="8dp"
+            android:lineSpacingExtra="3dp"
+            android:shadowColor="#b0000000"
+            android:shadowRadius="6"
+            android:text="OK 暂停 / 播放
+← 双击 重唱　→ 双击 切歌
+↑ 原唱 / 伴唱　↓ 操作菜单
+功能键 大类 / 已点　返回 回播放页"
+            android:textColor="#ffffff"
+            android:textSize="11sp" />
+    </LinearLayout>
+
     <!-- 已点队列（播放页按功能键开关） -->
     <LinearLayout
         android:id="@+id/queuePanel"

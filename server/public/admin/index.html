@@ -241,6 +241,26 @@
       </div>
     </div>
     <div class="card">
+      <div class="row"><b style="font-size:16px">⚡ 目录树导入（网盘曲库免扫描）</b>
+        <span class="hint">网盘还没挂载好也能先入库：粘贴 115/阿里云盘导出的目录树，立刻可以点歌。文件真正可读后，再到「曲库维护」启用该目录并重扫补齐音轨信息。</span>
+      </div>
+      <div class="row" style="margin-top:10px">
+        <label class="f" style="flex:1">曲库目录地址（网盘挂载点，如 /vol02/1000-1-5f8dfde4/ktv歌库）
+          <input id="treeDir" style="width:100%" placeholder="/vol02/…/ktv歌库" />
+        </label>
+      </div>
+      <div class="row" style="margin-top:10px;align-items:flex-start">
+        <label class="f" style="flex:1">目录树文本（网盘客户端「导出目录树」得到，直接粘贴即可，自动识别编码）
+          <textarea id="treeText" rows="8" style="width:100%;font-family:Consolas,monospace" placeholder="|——根目录&#10;| |-ktv歌库&#10;| | |-周杰伦&#10;| | | |-周杰伦-晴天-国语-流行.mkv"></textarea>
+        </label>
+        <div style="display:flex;flex-direction:column;gap:8px;margin-left:10px">
+          <label class="ghost" style="cursor:pointer">上传目录树文件<input id="treeFile" type="file" accept=".txt,.tree" style="display:none" /></label>
+          <button class="act" id="btnTreeImport">解析并导入</button>
+        </div>
+      </div>
+      <div class="row" style="margin-top:10px"><span class="hint" id="treeResult"></span></div>
+    </div>
+    <div class="card">
       <div class="row"><b>当前处理</b><span id="curFile" class="hint">—</span></div>
       <div class="bar" style="margin:10px 0"><i id="impBar"></i></div>
       <div class="row"><span id="impMsg" class="hint">尚未开始扫描</span></div>
@@ -758,6 +778,49 @@ $('#btnScan').onclick = async () => {
   if (!r.started) return toast(r.reason || '未能开始扫描');
   toast('扫描已开始');
   logLine('扫描开始：' + dirs.join(' , '));
+};
+
+/* ================= 目录树导入 ================= */
+// 读文件并自动识别编码（115 导出的目录树常见 UTF-16LE 带 BOM）
+$('#treeFile').addEventListener('change', async (e) => {
+  const f = e.target.files[0];
+  if (!f) return;
+  const buf = await f.arrayBuffer();
+  const bytes = new Uint8Array(buf);
+  let text;
+  if (bytes[0] === 0xff && bytes[1] === 0xfe) text = new TextDecoder('utf-16le').decode(buf);
+  else if (bytes[0] === 0xfe && bytes[1] === 0xff) text = new TextDecoder('utf-16be').decode(buf);
+  else text = new TextDecoder('utf-8').decode(buf);
+  $('#treeText').value = text;
+  if (!$('#treeDir').value.trim()) {
+    // 从树内容猜目录名：第一个含视频文件的层级目录通常就是曲库根
+    const m = text.split(/\r?\n/).map((s) => s.trim()).find((s) => /\.(mkv|mp4|avi|ts|mpg|mpeg|wmv|flv|mov|m2ts|rmvb|vob)$/i.test(s));
+    toast('已读入 ' + f.name + (m ? '，请填写曲库目录地址' : ''));
+  }
+  e.target.value = '';
+});
+
+$('#btnTreeImport').onclick = async () => {
+  const dir = $('#treeDir').value.trim();
+  const tree = $('#treeText').value;
+  if (!dir) return toast('请填写曲库目录地址');
+  if (!tree.trim()) return toast('请粘贴或上传目录树文本');
+  const btn = $('#btnTreeImport');
+  btn.disabled = true;
+  $('#treeResult').textContent = '解析中…';
+  try {
+    const r = await post('/api/admin/tree-import', { dir, tree });
+    $('#treeResult').innerHTML =
+      '<b style="color:#4ade80">导入成功</b>：视频 ' + r.files + ' 个，新增 ' + r.inserted +
+      '、更新 ' + r.updated + '，涉及歌手 ' + r.artists + ' 位，曲库共 ' + r.total + ' 首' +
+      (r.anchorNote ? '<br>' + esc(r.anchorNote) : '') +
+      '<br>目录已登记到「曲库维护」（默认停用）；文件可读后请启用并重扫，补齐时长与音轨信息';
+    toast('目录树导入完成');
+  } catch (err) {
+    $('#treeResult').innerHTML = '<b style="color:#ff8080">' + esc(err.message || '导入失败') + '</b>';
+  } finally {
+    btn.disabled = false;
+  }
 };
 
 /* ================= 曲库维护 ================= */

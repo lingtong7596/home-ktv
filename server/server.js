@@ -9,6 +9,7 @@ import { Playback } from './src/playback.js';
 import { Remuxer } from './src/remux.js';
 import { createHub } from './src/events.js';
 import { scanLibrary } from './src/scanner.js';
+import { importFromTree } from './src/treeImport.js';
 import { createAvatarFetcher } from './src/avatars.js';
 import { ffmpegAvailable } from './src/probe.js';
 import { qrSvg } from './src/qr.js';
@@ -234,7 +235,13 @@ const orphanState = {
 
 async function startOrphanScan() {
   if (orphanState.running) return { started: false, reason: '正在检查中' };
-  const songs = library.songs.slice();
+  // 已停用的目录（网盘未挂载等）不做孤儿检查——文件暂时不可达不代表已失效
+  const disabled = new Set(cfg.disabledDirs || []);
+  const songs = library.songs.filter((s) => {
+    if (!disabled.size) return true;
+    for (const d of disabled) if (String(s.file || '').startsWith(d)) return false;
+    return true;
+  });
   Object.assign(orphanState, {
     running: true, checked: 0, total: songs.length, missing: [], startedAt: Date.now(), finishedAt: 0, truncated: false,
   });
@@ -844,6 +851,45 @@ const server = http.createServer(async (req, res) => {
         saveConfig(cfg);
         return json(res, 200, { ok: true, mediaDirs: cfg.mediaDirs, disabledDirs: cfg.disabledDirs || [] });
       }
+    }
+
+    /* ---- 目录树导入（网盘曲库免扫描离线入库） ---- */
+    if (pathname === '/api/admin/tree-import' && method === 'POST') {
+      if (!requireAdmin(req, res, url)) return;
+      const body = await readBody(req);
+      const dir = path.resolve(String(body.dir || '').trim());
+      const tree = String(body.tree || '');
+      if (!dir || dir === '/') return json(res, 400, { error: '请填写曲库目录地址' });
+      if (!tree.trim()) return json(res, 400, { error: '请粘贴或上传目录树文本' });
+      let result;
+      try {
+        result = importFromTree({ cfg, baseDir: dir, treeText: tree });
+      } catch (err) {
+        return json(res, 400, { error: err.message });
+      }
+      if (!result.songs.length) {
+        return json(res, 400, { error: `目录树里没有找到视频文件（支持：${cfg.videoExts.join(' ')}）。请确认导出的是完整目录树`, anchorNote: result.anchorNote });
+      }
+      // 目录自动登记为曲库来源（停用状态——目录可能还没挂载，避免扫描踩网盘）
+      if (!cfg.mediaDirs.includes(dir)) cfg.mediaDirs.push(dir);
+      const set = new Set(cfg.disabledDirs || []);
+      set.add(dir);
+      cfg.disabledDirs = [...set];
+      saveConfig(cfg);
+      const db = library.addSongs(result.songs);
+      hub.broadcast('library', { total: library.songs.length, facets: library.langFacets() });
+      playback.broadcast();
+      log(`[tree-import] 入库完成：新增 ${db.inserted}、更新 ${db.updated}（${dir}）`);
+      return json(res, 200, {
+        ok: true,
+        files: result.files,
+        inserted: db.inserted,
+        updated: db.updated,
+        artists: result.artists.length,
+        total: library.songs.length,
+        anchorNote: result.anchorNote,
+        dirRegistered: true,
+      });
     }
 
     /* ---- 孤儿曲目（文件已不存在）检查与清理 ---- */

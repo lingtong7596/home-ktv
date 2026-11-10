@@ -97,6 +97,7 @@ class MainActivity : AppCompatActivity() {
     private lateinit var playerView: PlayerView
     private lateinit var idleView: View
     private lateinit var topBar: View
+    private lateinit var playOverlay: View
     private lateinit var queuePanel: View
     private lateinit var queueListBox: LinearLayout
     private lateinit var queueTitle: TextView
@@ -165,6 +166,7 @@ class MainActivity : AppCompatActivity() {
         playerView = findViewById(R.id.playerView)
         idleView = findViewById(R.id.idleView)
         topBar = findViewById(R.id.topBar)
+        playOverlay = findViewById(R.id.playOverlay)
         queuePanel = findViewById(R.id.queuePanel)
         queueListBox = findViewById(R.id.queueList)
         queueTitle = findViewById(R.id.queueTitle)
@@ -475,6 +477,7 @@ class MainActivity : AppCompatActivity() {
             hasCurrent = false
             idleView.visibility = if (browserPanel.visibility == View.VISIBLE) View.GONE else View.VISIBLE
             topBar.visibility = View.GONE
+            playOverlay.visibility = View.GONE
             if (!queueOpen) queuePanel.visibility = View.GONE
             hideActionMenu()
             currentSongId = ""
@@ -488,6 +491,7 @@ class MainActivity : AppCompatActivity() {
         idleView.visibility = View.GONE
         hasCurrent = true
         topBar.visibility = overlayVisibility()
+        playOverlay.visibility = overlayVisibility()
 
         val song = current.getJSONObject("song")
         val track = current.optInt("track", 0)
@@ -991,6 +995,7 @@ class MainActivity : AppCompatActivity() {
         hideActionMenu()
         // 隐藏播放页浮层（歌曲信息），避免叠在列表上
         topBar.visibility = View.GONE
+        playOverlay.visibility = View.GONE
         refreshBrowser()
         paintLetters()
         // 光标默认落在第一行的「点歌」按钮上（列表加载完成后 focusFirstOrderButton 接管）；
@@ -1004,6 +1009,8 @@ class MainActivity : AppCompatActivity() {
         favButtons.clear()
         // 没在播放时把待机页（二维码）还回来，否则关掉点歌台就是一片黑
         if (!hasCurrent) idleView.visibility = View.VISIBLE
+        topBar.visibility = overlayVisibility()
+        playOverlay.visibility = overlayVisibility()
     }
 
     private fun refreshBrowser() {
@@ -1630,6 +1637,7 @@ class MainActivity : AppCompatActivity() {
             }
             qrBig.setImageBitmap(bmp)
             qrSide.setImageBitmap(bmp)
+            findViewById<ImageView>(R.id.qrPlay).setImageBitmap(bmp)
             findViewById<TextView>(R.id.idleRoom).text = getString(R.string.app_name)
         } catch (_: Exception) {
         }

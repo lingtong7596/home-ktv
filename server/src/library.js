@@ -315,6 +315,22 @@ export class Library {
     this.favIds = this.store.favAll().map((r) => r.song_id);
   }
 
+  /**
+   * 增量补充歌曲（目录树导入等）：只 upsert 这些行，不做缺失清理。
+   * 已存在的行（如之前扫描入库的同一路径）保留播放记录等用户数据。
+   */
+  addSongs(songs) {
+    if (!songs || !songs.length) return { inserted: 0, updated: 0 };
+    const result = this.store.upsertOnly(songs);
+    this.songs = this.store.all();
+    this.byIdMap = new Map(this.songs.map((s) => [s.id, s]));
+    this.updatedAt = Date.now();
+    this.stats = { ...(this.stats || {}), total: this.songs.length, db: result };
+    this.reloadArtists();
+    this.favIds = this.store.favAll().map((r) => r.song_id);
+    return result;
+  }
+
   get(id) {
     return this.byIdMap.get(id) || null;
   }

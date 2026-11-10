@@ -166,6 +166,50 @@ export class SongStore {
    *  - 确认文件已不存在（或在黑名单里）的行才删除；
    *    网盘目录偶发读取不完整时整批保留，避免把曲库误清空
    */
+  /** 单行写入（upsertScan / upsertOnly 共用），返回是否为更新已有行 */
+  runUpsert(s, now) {
+    const existed = this.stmtGet.get(s.id);
+    this.stmtUpsert.run(
+      s.id,
+      s.file,
+      s.rel ?? null,
+      s.dir ?? null,
+      s.name ?? null,
+      s.title ?? '',
+      s.artist ?? '',
+      JSON.stringify(s.artists || []),
+      s.lang ?? '',
+      s.type ?? '',
+      s.duration | 0,
+      s.width | 0,
+      s.height | 0,
+      s.vcodec ?? '',
+      JSON.stringify(s.audios || []),
+      s.trackCount | 0,
+      s.size | 0,
+      s.mtime | 0,
+      s.py ?? '',
+      s.init ?? '',
+      s.apy ?? '',
+      s.ainit ?? '',
+      s.pinit ?? '',
+      s.plays ?? 0,
+      s.lastPlayed ?? 0,
+      s.addedAt ?? now,
+      s.origTrack ?? null,
+      s.accTrack ?? null,
+      s.probeOk ? 1 : 0,
+      s.trackGuess ?? '',
+    );
+    return !!existed;
+  }
+
+  /**
+   * 批量写入扫描结果：
+   *  - 已存在的行只更新文件元信息，保留 plays / last_played / added_at / 音轨覆盖
+   *  - 确认文件已不存在（或在黑名单里）的行才删除；
+   *    网盘目录偶发读取不完整时整批保留，避免把曲库误清空
+   */
   upsertScan(songs) {
     const now = Date.now();
     let inserted = 0;
@@ -174,40 +218,7 @@ export class SongStore {
     this.db.exec('BEGIN');
     try {
       for (const s of songs) {
-        const existed = this.stmtGet.get(s.id);
-        this.stmtUpsert.run(
-          s.id,
-          s.file,
-          s.rel ?? null,
-          s.dir ?? null,
-          s.name ?? null,
-          s.title ?? '',
-          s.artist ?? '',
-          JSON.stringify(s.artists || []),
-          s.lang ?? '',
-          s.type ?? '',
-          s.duration | 0,
-          s.width | 0,
-          s.height | 0,
-          s.vcodec ?? '',
-          JSON.stringify(s.audios || []),
-          s.trackCount | 0,
-          s.size | 0,
-          s.mtime | 0,
-          s.py ?? '',
-          s.init ?? '',
-          s.apy ?? '',
-          s.ainit ?? '',
-          s.pinit ?? '',
-          s.plays ?? 0,
-          s.lastPlayed ?? 0,
-          s.addedAt ?? now,
-          s.origTrack ?? null,
-          s.accTrack ?? null,
-          s.probeOk ? 1 : 0,
-          s.trackGuess ?? '',
-        );
-        if (existed) updated++;
+        if (this.runUpsert(s, now)) updated++;
         else inserted++;
       }
 
@@ -243,6 +254,28 @@ export class SongStore {
       this.stmtMeta.run('song_count', String(songs.length));
       this.db.exec('COMMIT');
       return { inserted, updated, removed, total: songs.length };
+    } catch (err) {
+      this.db.exec('ROLLBACK');
+      throw err;
+    }
+  }
+
+  /**
+   * 批量插入/更新，但**不做缺失清理**。
+   * 用于目录树导入等"只补充曲库"的场景——库里其余歌曲一律不动。
+   */
+  upsertOnly(songs) {
+    const now = Date.now();
+    let inserted = 0;
+    let updated = 0;
+    this.db.exec('BEGIN');
+    try {
+      for (const s of songs) {
+        if (this.runUpsert(s, now)) updated++;
+        else inserted++;
+      }
+      this.db.exec('COMMIT');
+      return { inserted, updated };
     } catch (err) {
       this.db.exec('ROLLBACK');
       throw err;

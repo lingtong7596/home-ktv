@@ -392,6 +392,19 @@
             android:textSize="12sp" />
     </LinearLayout>
 
+    <!-- 暂停时画面中央的大图标（恢复播放即消失） -->
+    <TextView
+        android:id="@+id/pauseBadge"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_gravity="center"
+        android:background="#66000000"
+        android:padding="28dp"
+        android:text="⏸"
+        android:textColor="#ffffff"
+        android:textSize="64sp"
+        android:visibility="gone" />
+
     <!-- 已点队列（播放页按功能键开关） -->
     <LinearLayout
         android:id="@+id/queuePanel"

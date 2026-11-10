@@ -98,6 +98,8 @@ class MainActivity : AppCompatActivity() {
     private lateinit var idleView: View
     private lateinit var topBar: View
     private lateinit var playOverlay: View
+    private lateinit var pauseBadge: View
+    private var pausedNow = false
     private lateinit var queuePanel: View
     private lateinit var queueListBox: LinearLayout
     private lateinit var queueTitle: TextView
@@ -167,6 +169,11 @@ class MainActivity : AppCompatActivity() {
         idleView = findViewById(R.id.idleView)
         topBar = findViewById(R.id.topBar)
         playOverlay = findViewById(R.id.playOverlay)
+        pauseBadge = findViewById(R.id.pauseBadge)
+        // 播放器视图不允许获得焦点：否则遥控器 OK 键会被它当成"点击"消费掉，
+        // 弹出操作菜单而不是暂停（Click listener 保留给触屏用）
+        playerView.isFocusable = false
+        playerView.isFocusableInTouchMode = false
         queuePanel = findViewById(R.id.queuePanel)
         queueListBox = findViewById(R.id.queueList)
         queueTitle = findViewById(R.id.queueTitle)
@@ -478,6 +485,7 @@ class MainActivity : AppCompatActivity() {
             idleView.visibility = if (browserPanel.visibility == View.VISIBLE) View.GONE else View.VISIBLE
             topBar.visibility = View.GONE
             playOverlay.visibility = View.GONE
+            pauseBadge.visibility = View.GONE
             if (!queueOpen) queuePanel.visibility = View.GONE
             hideActionMenu()
             currentSongId = ""
@@ -511,6 +519,12 @@ class MainActivity : AppCompatActivity() {
         }
         (findViewById<View>(R.id.amPause) as? Button)?.text =
             if (current.optBoolean("paused")) "▶ 播放" else "⏸ 暂停"
+
+        // 暂停是本地播放器的事：服务器只是逻辑状态，必须真正停/启 ExoPlayer
+        val paused = current.optBoolean("paused")
+        pausedNow = paused
+        player.playWhenReady = !paused
+        pauseBadge.visibility = if (paused && browserPanel.visibility != View.VISIBLE) View.VISIBLE else View.GONE
 
         // 收藏状态：用颜色 + 文案表达，不再靠 emoji 的颜色（emoji 永远红，之前就是它骗了人）
         currentIsFav = favIds.contains(currentSongId)
@@ -698,6 +712,23 @@ class MainActivity : AppCompatActivity() {
 
     /* ---------------- 快捷键 / 遥控器 ---------------- */
 
+    override fun dispatchKeyEvent(event: KeyEvent): Boolean {
+        // 播放页：确认键必须走「暂停 / 播放」。
+        // 用 dispatch 而不是 onKeyDown：焦点一旦落在播放器视图上，OK 会在子 View 层被
+        // 当成"点击"消费掉（弹操作菜单），永远到不了 onKeyDown——之前就是这个坑。
+        val inBrowser = browserPanel.visibility == View.VISIBLE
+        if (!errorShown && !menuOpen && !inBrowser &&
+            event.action == KeyEvent.ACTION_DOWN &&
+            (event.keyCode == KeyEvent.KEYCODE_DPAD_CENTER ||
+                event.keyCode == KeyEvent.KEYCODE_ENTER ||
+                event.keyCode == KeyEvent.KEYCODE_NUMPAD_ENTER)
+        ) {
+            if (event.repeatCount == 0 && hasCurrent) togglePlay()
+            return true
+        }
+        return super.dispatchKeyEvent(event)
+    }
+
     override fun onKeyDown(keyCode: Int, event: KeyEvent?): Boolean {
         // 播放失败浮层：任何键都要能出去
         if (errorShown) {
@@ -758,11 +789,12 @@ class MainActivity : AppCompatActivity() {
                 return true
             }
             KeyEvent.KEYCODE_DPAD_UP -> {
-                if (hasCurrent) toggleTrack()
+                // 长按会连发 repeat 事件，不去重会把原唱/伴唱来回打
+                if (hasCurrent && (event?.repeatCount ?: 0) == 0) toggleTrack()
                 return true
             }
             KeyEvent.KEYCODE_DPAD_DOWN -> {
-                if (hasCurrent) showActionMenu()
+                if (hasCurrent && (event?.repeatCount ?: 0) == 0) showActionMenu()
                 return true
             }
             KeyEvent.KEYCODE_DPAD_CENTER, KeyEvent.KEYCODE_ENTER, KeyEvent.KEYCODE_NUMPAD_ENTER -> {
@@ -770,7 +802,7 @@ class MainActivity : AppCompatActivity() {
                 if ((event?.repeatCount ?: 0) == 0 && hasCurrent) togglePlay()
                 return true
             }
-            KeyEvent.KEYCODE_MEDIA_PLAY_PAUSE -> { togglePlay(); return true }
+            KeyEvent.KEYCODE_MEDIA_PLAY_PAUSE -> { if ((event?.repeatCount ?: 0) == 0) togglePlay(); return true }
             KeyEvent.KEYCODE_MEDIA_NEXT -> { doNext(); return true }
         }
         return super.onKeyDown(keyCode, event)
@@ -996,6 +1028,7 @@ class MainActivity : AppCompatActivity() {
         // 隐藏播放页浮层（歌曲信息），避免叠在列表上
         topBar.visibility = View.GONE
         playOverlay.visibility = View.GONE
+        pauseBadge.visibility = View.GONE
         refreshBrowser()
         paintLetters()
         // 光标默认落在第一行的「点歌」按钮上（列表加载完成后 focusFirstOrderButton 接管）；
@@ -1011,6 +1044,7 @@ class MainActivity : AppCompatActivity() {
         if (!hasCurrent) idleView.visibility = View.VISIBLE
         topBar.visibility = overlayVisibility()
         playOverlay.visibility = overlayVisibility()
+        pauseBadge.visibility = if (pausedNow && hasCurrent) View.VISIBLE else View.GONE
     }
 
     private fun refreshBrowser() {

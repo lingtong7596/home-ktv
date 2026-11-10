@@ -126,6 +126,80 @@
   .conn { position: absolute; left: 2.4vw; bottom: 1.2vw; font-size: .8vw; color: rgba(255,255,255,.35); }
   .conn.bad { color: #ff8080; }
   .conn a { color: rgba(255,255,255,.5); text-decoration: none; }
+
+  /* ================= 主题系统 =================
+     cinema 影院黑（默认）/ neon 霓虹夜 / day 素雅亮
+     只换变量与背景装饰，所有按钮/键位/面板结构不变 */
+  body { transition: background .5s; }
+  body[data-theme="neon"] {
+    --bg: #0b0518;
+    --panel: rgba(24, 10, 48, .94);
+    --line: rgba(0, 229, 255, .22);
+    --text: #f4f0ff;
+    --muted: #b3a8d9;
+    --brand: #00e5ff;
+    --brand2: #ff2ec4;
+    --ok: #00ffc8;
+  }
+  body[data-theme="neon"] #idle {
+    background: radial-gradient(1000px 600px at 15% 25%, #2b0a54 0%, #0b0518 55%),
+                radial-gradient(800px 500px at 85% 80%, #4a0a3c 0%, transparent 70%);
+  }
+  body[data-theme="neon"] .bigtitle {
+    background-image: linear-gradient(100deg, #fff 10%, var(--brand) 45%, var(--brand2) 85%);
+  }
+  body[data-theme="neon"] button.ctl { box-shadow: 0 0 14px rgba(0,229,255,.25), inset 0 0 8px rgba(255,46,196,.12); }
+  body[data-theme="neon"] button.ctl.primary { background: linear-gradient(90deg, var(--brand), #7a5cff); color: #061024; }
+  body[data-theme="neon"] .badge.hot { background: linear-gradient(90deg, var(--brand2), var(--brand)); color: #24062e; }
+  body[data-theme="neon"] .progress i { background: linear-gradient(90deg, var(--brand), var(--brand2)); box-shadow: 0 0 10px rgba(0,229,255,.8); }
+  body[data-theme="neon"] #idle::before, body[data-theme="neon"] #idle::after {
+    content: ''; position: absolute; border-radius: 50%; filter: blur(90px); opacity: .5; pointer-events: none;
+  }
+  body[data-theme="neon"] #idle::before { width: 26vw; height: 26vw; left: 8vw; top: 10vh; background: #7a2bff; animation: float1 9s ease-in-out infinite alternate; }
+  body[data-theme="neon"] #idle::after { width: 20vw; height: 20vw; right: 24vw; bottom: 8vh; background: #ff2ec4; animation: float1 11s ease-in-out infinite alternate-reverse; }
+  @keyframes float1 { from { transform: translateY(0) scale(1); } to { transform: translateY(-4vh) scale(1.12); } }
+
+  body[data-theme="day"] {
+    --bg: #eef1f6;
+    --panel: rgba(255, 255, 255, .96);
+    --line: rgba(15, 40, 80, .14);
+    --text: #17233b;
+    --muted: #5c6b84;
+    --brand: #e8446a;
+    --brand2: #f5a623;
+    --ok: #18a05e;
+  }
+  body[data-theme="day"] #idle {
+    background: radial-gradient(1200px 700px at 20% 20%, #ffffff 0%, #dfe7f3 65%);
+  }
+  body[data-theme="day"] .bigtitle { background-image: linear-gradient(100deg, #17233b 30%, var(--brand) 75%); }
+  body[data-theme="day"] .tips, body[data-theme="day"] .room { color: var(--muted); }
+  body[data-theme="day"] .tips b { color: #17233b; }
+  body[data-theme="day"] .idle-actions a { color: #17233b; border-color: rgba(15,40,80,.25); background: rgba(255,255,255,.7); }
+  body[data-theme="day"] #topbar { background: linear-gradient(180deg, rgba(255,255,255,.9), transparent); }
+  body[data-theme="day"] #controls { background: linear-gradient(0deg, rgba(235,240,248,.95), transparent); }
+  body[data-theme="day"] button.ctl { background: rgba(255,255,255,.85); color: #17233b; border-color: rgba(15,40,80,.16); box-shadow: 0 2px 10px rgba(23,35,59,.08); }
+  body[data-theme="day"] button.ctl:hover { background: #fff; }
+  body[data-theme="day"] button.ctl.primary { color: #fff; }
+  body[data-theme="day"] button.ctl.ghost { background: transparent; }
+  body[data-theme="day"] .badge { color: #33415c; background: rgba(255,255,255,.7); }
+  body[data-theme="day"] .badge.hot { color: #fff; }
+  body[data-theme="day"] #queuePanel { background: var(--panel); }
+  body[data-theme="day"] #queuePanel h3, body[data-theme="day"] .qitem .x { color: #17233b; }
+  body[data-theme="day"] .qitem button { background: rgba(23,35,59,.05); color: #33415c; }
+  body[data-theme="day"] #qrmini .cap { background: rgba(23,35,59,.7); }
+  body[data-theme="day"] #preparing { background: rgba(240,244,250,.94); }
+  body[data-theme="day"] #preparing .msg { color: #17233b; }
+  body[data-theme="day"] #toast { color: #17233b; }
+  body[data-theme="day"] .conn { color: rgba(23,35,59,.4); }
+  body[data-theme="day"] .conn a { color: rgba(23,35,59,.6); }
+
+  /* 当前歌手头像（播放页顶部信息） */
+  #nowAvatar { width: 4.2vw; height: 4.2vw; border-radius: 50%; object-fit: cover; border: 2px solid var(--brand2);
+    box-shadow: 0 6px 22px rgba(0,0,0,.45); background: #fff; flex-shrink: 0; }
+  .now-wrap { display: flex; gap: 1vw; align-items: flex-start; }
+  .qitem .av { width: 2.6vw; height: 2.6vw; border-radius: 50%; object-fit: cover; flex-shrink: 0; background: #fff; }
+  .theme-dot { display: inline-block; width: .8vw; height: .8vw; border-radius: 50%; margin-right: .4vw; background: currentColor; }
 </style>
 </head>
 <body>
@@ -155,13 +229,16 @@
 
   <!-- 顶部信息 -->
   <div class="overlay" id="topbar">
-    <div class="now">
-      <div class="t" id="nowTitle">—</div>
-      <div class="a" id="nowArtist">—</div>
-      <div class="badges">
-        <span class="badge hot" id="trackBadge">原唱</span>
-        <span class="badge" id="queueBadge">已点 0 首</span>
-        <span class="badge" id="byBadge" style="display:none"></span>
+    <div class="now-wrap">
+      <img id="nowAvatar" alt="" style="display:none" />
+      <div class="now">
+        <div class="t" id="nowTitle">—</div>
+        <div class="a" id="nowArtist">—</div>
+        <div class="badges">
+          <span class="badge hot" id="trackBadge">原唱</span>
+          <span class="badge" id="queueBadge">已点 0 首</span>
+          <span class="badge" id="byBadge" style="display:none"></span>
+        </div>
       </div>
     </div>
     <div id="qrmini">
@@ -183,6 +260,7 @@
     <div class="btns">
       <button class="ctl ghost" id="btnQueue">☰ 已点</button>
       <button class="ctl ghost" id="btnBrowser">🎵 点歌台</button>
+      <button class="ctl ghost" id="btnTheme">🎨 影院黑</button>
       <button class="ctl ghost" id="btnFs">⛶ 全屏</button>
     </div>
     <div class="progress"><i id="bar"></i></div>
@@ -245,6 +323,23 @@ function initQr() {
 }
 
 /* ---------------- 状态渲染 ---------------- */
+const THEMES = [
+  { id: 'cinema', label: '影院黑' },
+  { id: 'neon', label: '霓虹夜' },
+  { id: 'day', label: '素雅亮' },
+];
+function applyTheme(id) {
+  const t = THEMES.find((x) => x.id === id) || THEMES[0];
+  document.body.dataset.theme = t.id;
+  $('btnTheme').textContent = '🎨 ' + t.label;
+  try { localStorage.setItem('ktvTheme', t.id); } catch {}
+}
+$('btnTheme').onclick = (e) => {
+  e.stopPropagation();
+  const cur = THEMES.findIndex((x) => x.id === document.body.dataset.theme);
+  applyTheme(THEMES[(cur + 1) % THEMES.length].id);
+};
+
 function render() {
   const cur = state && state.current;
   document.getElementById('roomName').textContent = (state && state.room) || '客厅';
@@ -259,6 +354,7 @@ function render() {
     hidePreparing();
     $('queueBadge').textContent = `已点 ${state ? state.queue.length : 0} 首`;
     $('topbar').classList.remove('show');
+    $('nowAvatar').style.display = 'none';
     renderQueue();
     return;
   }
@@ -267,7 +363,10 @@ function render() {
   video.classList.add('on');
 
   $('nowTitle').textContent = cur.song.title;
+  const mainArtist = (cur.song.artists && cur.song.artists.length ? cur.song.artists[0] : cur.song.artist) || '';
   $('nowArtist').textContent = cur.song.artist + (cur.song.lang ? ` · ${cur.song.lang}` : '');
+  $('nowAvatar').src = `/api/artist-avatar?name=${encodeURIComponent(mainArtist)}`;
+  $('nowAvatar').style.display = '';
   const isAcc = cur.trackRole === 'acc';
   $('trackBadge').textContent = cur.trackCount > 1 ? (isAcc ? '伴唱' : '原唱') : '单音轨';
   $('btnTrack').textContent = '🎤 ' + (isAcc ? '伴唱' : '原唱');
@@ -302,8 +401,10 @@ function renderQueue() {
     ? list.map((q, i) => {
         const p = q.prepare || {};
         const busy = p.state === 'running' || p.state === 'queued' || p.state === 'probing' || p.state === 'pending';
+        const av = `/api/artist-avatar?name=${encodeURIComponent(q.song.artist || '')}`;
         return `<div class="qitem">
           <div class="n">${i + 1}</div>
+          <img class="av" src="${av}" alt="" loading="lazy" />
           <div class="x">${esc(q.song.title)}<small>${esc(q.song.artist)}${q.by ? ' · ' + esc(q.by) : ''}</small>
             ${busy ? `<div class="prep">读取音轨中${p.progress ? ' ' + p.progress + '%' : '…'}</div>` : ''}</div>
           <button data-q="${q.qid}" data-act="top" title="置顶">⬆</button>
@@ -613,6 +714,7 @@ function connect() {
 
 (async function boot() {
   window.__cfg = await fetch('/api/config').then((r) => r.json()).catch(() => ({}));
+  try { applyTheme(localStorage.getItem('ktvTheme') || 'cinema'); } catch { applyTheme('cinema'); }
   initQr();
   $('conn').innerHTML = '● 已连接 · <a href="/">' + location.host + '</a>';
   connect();

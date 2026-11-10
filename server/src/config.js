@@ -10,6 +10,8 @@ export const DEFAULT_CONFIG = {
   roomName: '客厅',
   // 曲库目录：飞牛 NAS 上存放 KTV 视频的路径，可配置多个（本地盘 + 网盘可混用）
   mediaDirs: [],
+  // 后台可单独停用的曲库目录（目录仍在列表里，但扫描时跳过，方便排查慢盘/坏盘）
+  disabledDirs: [],
   dataDir: './data',
   cacheDir: './cache',
   // 转码缓存上限（GB），超出后按最久未使用清理
@@ -90,6 +92,8 @@ export function loadConfig() {
 
   const env = process.env;
   if (env.KTV_PORT) cfg.port = Number(env.KTV_PORT) || cfg.port;
+  // 通用托管平台（PaaS/沙箱）约定注入 PORT，这里兜底支持（KTV_PORT 优先）
+  else if (env.PORT) cfg.port = Number(env.PORT) || cfg.port;
   if (env.KTV_HOST) cfg.host = env.KTV_HOST;
   if (env.KTV_DATA_DIR) cfg.dataDir = env.KTV_DATA_DIR;
   if (env.KTV_CACHE_DIR) cfg.cacheDir = env.KTV_CACHE_DIR;

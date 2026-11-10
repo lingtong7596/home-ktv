@@ -48,7 +48,12 @@ export async function scanLibrary(cfg, { onProgress = () => {}, prevSongs = new 
     onProgress({ phase: 'walk', done: files.length, total: 0, message: `已发现 ${files.length} 个视频文件` });
   };
 
+  const disabled = new Set(cfg.disabledDirs || []);
   for (const dir of cfg.mediaDirs) {
+    if (disabled.has(dir)) {
+      log(`[scan] 目录已停用，跳过: ${dir}`);
+      continue;
+    }
     if (!fs.existsSync(dir)) {
       log(`[scan] 目录不存在，跳过: ${dir}`);
       continue;

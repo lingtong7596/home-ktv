@@ -140,6 +140,8 @@ class MainActivity : AppCompatActivity() {
     // 点歌台里每个「点歌 / 收藏」按钮的引用，状态一变就能立刻改色
     private val orderButtons = LinkedHashMap<String, Button>()
     private val favButtons = LinkedHashMap<String, Button>()
+    // 歌手头像内存缓存（列表滚动时不重复拉图，容量小足够）
+    private val avatarCache = object : android.util.LruCache<String, android.graphics.Bitmap>(96) {}
     // 字母索引按钮（key：'A'..'Z'、'0'..'9'、' ' = 全部）
     private val letterButtons = HashMap<Char, Button>()
 
@@ -1355,6 +1357,29 @@ class MainActivity : AppCompatActivity() {
         })
         row.addView(idx)
 
+        // 歌手头像：优先服务端自动匹配的真实头像，没有则是彩色占位图
+        val avatarPath = song.optString("artistAvatar", "")
+        if (avatarPath.isNotEmpty()) {
+            val iv = ImageView(this)
+            iv.layoutParams = LinearLayout.LayoutParams(dp(44), dp(44)).apply { rightMargin = dp(12) }
+            iv.scaleType = ImageView.ScaleType.CENTER_CROP
+            iv.background = roundBg(C_CARD2, 0xFF2A2F3D.toInt(), 1)
+            val cached = avatarCache.get(avatarPath)
+            if (cached != null) {
+                iv.setImageBitmap(cached)
+            } else {
+                iv.setImageDrawable(null)
+                Thread {
+                    val bmp = loadBitmap(avatarPath)
+                    if (bmp != null) {
+                        avatarCache.put(avatarPath, bmp)
+                        main.post { if (!isFinishing) iv.setImageBitmap(bmp) }
+                    }
+                }.start()
+            }
+            row.addView(iv)
+        }
+
         // 歌名（演唱中前面加金色圆点）
         val tvTitle = TextView(this)
         tvTitle.text = if (isNow) "● $title" else title
@@ -1551,10 +1576,18 @@ class MainActivity : AppCompatActivity() {
         iv.layoutParams = LinearLayout.LayoutParams(dp(76), dp(76)).apply { rightMargin = dp(14) }
         iv.scaleType = ImageView.ScaleType.CENTER_CROP
         iv.setBackgroundColor(C_CARD2)
-        Thread {
-            val bmp = loadBitmap("/api/artists/$id/avatar")
-            if (bmp != null) main.post { iv.setImageBitmap(bmp) }
-        }.start()
+        val cachedAv = avatarCache.get("/artist/$id")
+        if (cachedAv != null) {
+            iv.setImageBitmap(cachedAv)
+        } else {
+            Thread {
+                val bmp = loadBitmap("/api/artists/$id/avatar")
+                if (bmp != null) {
+                    avatarCache.put("/artist/$id", bmp)
+                    main.post { if (!isFinishing) iv.setImageBitmap(bmp) }
+                }
+            }.start()
+        }
         row.addView(iv)
 
         val tv = TextView(this)

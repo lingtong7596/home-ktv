@@ -19,6 +19,7 @@ export class Library {
     this.byIdMap = new Map();
     this.artists = [];
     this.artistById = new Map();
+    this.artistByName = new Map();
     this.favIds = [];
     this.updatedAt = 0;
     this.stats = { total: 0 };
@@ -91,6 +92,7 @@ export class Library {
       .map((a) => ({ ...a, count: counts.get(a.name) || 0, plays: plays.get(a.name) || 0 }))
       .sort((a, b) => b.count - a.count || a.name.localeCompare(b.name, 'zh-Hans-CN'));
     this.artistById = new Map(this.artists.map((a) => [a.id, a]));
+    this.artistByName = new Map(this.artists.map((a) => [a.name, a]));
   }
 
   avatarFile(id) {
@@ -103,6 +105,21 @@ export class Library {
     } catch {
       return false;
     }
+  }
+
+  /** 按歌手名取头像地址（列表/播放页用），没有就返回占位图地址 */
+  avatarUrlByName(name, { fallback = true } = {}) {
+    const artist = this.artistByName && this.artistByName.get(name);
+    if (artist && this.hasAvatar(artist.id)) return `/api/artists/${artist.id}/avatar`;
+    return fallback ? `/api/avatar-placeholder.svg?name=${encodeURIComponent(name || '?')}` : '';
+  }
+
+  /** 给一批歌曲补上封面歌手头像（取第一歌手） */
+  withArtistAvatar(list) {
+    return list.map((s) => {
+      const main = (s.artists && s.artists.length ? s.artists[0] : s.artist) || '';
+      return { ...s, artistAvatar: this.avatarUrlByName(main) };
+    });
   }
 
   listArtists({ q = '', letter = '', region = '', gender = '', limit = 200, offset = 0 } = {}) {

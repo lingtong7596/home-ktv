@@ -107,6 +107,7 @@
     <button data-tab="artists">歌手管理</button>
     <button data-tab="favs">收藏夹</button>
     <button data-tab="import">批量导入</button>
+    <button data-tab="maint">曲库维护</button>
     <button data-tab="settings">系统设置</button>
   </nav>
 </header>
@@ -247,6 +248,55 @@
     </div>
   </section>
 
+  <!-- ============ 曲库维护 ============ -->
+  <section class="panel" id="tab-maint">
+    <div class="card">
+      <div class="row"><b style="font-size:16px">📁 曲库来源</b>
+        <span class="hint">停用的目录不参与扫描（歌曲记录保留），排查慢盘/坏盘时很有用</span>
+      </div>
+      <table style="margin-top:8px">
+        <thead><tr><th class="ell">目录</th><th>状态</th><th>歌曲数</th><th>操作</th></tr></thead>
+        <tbody id="sourceRows"><tr><td colspan="4" class="hint">加载中…</td></tr></tbody>
+      </table>
+      <div class="row" style="margin-top:10px">
+        <label class="f" style="flex:1">新增目录（NAS 绝对路径，如 /vol1/1000/ktv歌库）
+          <input id="srcAdd" style="width:100%" placeholder="/vol1/…" />
+        </label>
+        <button class="act" id="btnSrcAdd" style="align-self:flex-end">添加</button>
+        <button class="ghost" id="btnSrcRescanAll" style="align-self:flex-end">全部重扫</button>
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="row"><b style="font-size:16px">🧹 孤儿曲目清理</b>
+        <span class="hint">文件已被删除 / 网盘掉线时，曲库里的记录会变成"孤儿"（点进去播不了）</span>
+      </div>
+      <div class="row" style="margin-top:8px">
+        <button class="act" id="btnOrphanScan">检查失效文件</button>
+        <span class="hint" id="orphanMsg">尚未检查</span>
+      </div>
+      <div class="bar" style="margin:10px 0"><i id="orphanBar"></i></div>
+      <div id="orphanList" style="max-height:260px;overflow:auto"></div>
+    </div>
+
+    <div class="card">
+      <div class="row"><b style="font-size:16px">🖼️ 歌手头像自动匹配</b>
+        <span class="hint">按歌手名自动从公开音乐平台匹配头像并缓存到本机，抓不到的歌手可在「歌手管理」里手动上传</span>
+      </div>
+      <div class="row" style="margin-top:8px">
+        <button class="act" id="btnAvFetch">一键抓取缺失头像</button>
+        <button class="ghost" id="btnAvForce">强制重抓全部</button>
+        <span class="hint" id="avMsg">尚未开始</span>
+      </div>
+      <div class="bar" style="margin:10px 0"><i id="avBar"></i></div>
+      <div class="row">
+        <span class="tag" id="avOk">成功 0</span>
+        <span class="tag off" id="avFail">失败 0</span>
+        <span class="tag gray" id="avCur">—</span>
+      </div>
+    </div>
+  </section>
+
   <!-- ============ 系统设置 ============ -->
   <section class="panel" id="tab-settings">
     <div class="card">
@@ -336,6 +386,7 @@ document.querySelectorAll('nav button').forEach((btn) => {
     if (btn.dataset.tab === 'artists') loadArtists();
     if (btn.dataset.tab === 'favs') loadFavs();
     if (btn.dataset.tab === 'import') loadImportCfg();
+    if (btn.dataset.tab === 'maint') loadMaint();
     if (btn.dataset.tab === 'settings') loadSettings();
   };
 });
@@ -528,6 +579,7 @@ async function loadArtists() {
         '<td>' + (a.plays || 0) + '</td>' +
         '<td>' +
           '<button class="ghost mini" data-act="avatar">上传头像</button> ' +
+          '<button class="ghost mini" data-act="autofetch">自动抓头像</button> ' +
           '<button class="ghost mini" data-act="songs">查看歌曲</button>' +
         '</td></tr>').join('')
     : '<tr><td colspan="9" class="hint">没有符合条件的歌手</td></tr>';
@@ -543,7 +595,7 @@ $('#artistRows').addEventListener('change', async (e) => {
   toast('已保存');
 });
 
-$('#artistRows').addEventListener('click', (e) => {
+$('#artistRows').addEventListener('click', async (e) => {
   const btn = e.target.closest('button[data-act]');
   if (!btn) return;
   const tr = btn.closest('tr');
@@ -572,6 +624,16 @@ $('#artistRows').addEventListener('click', (e) => {
     picked.clear();
     songState.offset = 0;
     loadSongs();
+    return;
+  }
+  if (btn.dataset.act === 'autofetch') {
+    btn.disabled = true;
+    btn.textContent = '抓取中…';
+    const r = await post('/api/artists/' + id + '/avatar/fetch', {});
+    toast(r.ok ? '头像已抓取 ✅' : ('没抓到：' + (r.error || '平台上没有匹配到这个名字')));
+    btn.disabled = false;
+    btn.textContent = '自动抓头像';
+    loadArtists();
   }
 });
 
@@ -698,6 +760,114 @@ $('#btnScan').onclick = async () => {
   logLine('扫描开始：' + dirs.join(' , '));
 };
 
+/* ================= 曲库维护 ================= */
+async function loadSources() {
+  const r = await api('/api/admin/sources');
+  $('#sourceRows').innerHTML = r.items.length
+    ? r.items.map((s) => '<tr>' +
+        '<td class="ell hint" style="max-width:420px">' + esc(s.dir) + '</td>' +
+        '<td>' + (!s.exists ? '<span class="tag off">目录不存在</span>' : (s.enabled ? '<span class="tag">已启用</span>' : '<span class="tag gray">已停用</span>')) + '</td>' +
+        '<td>' + s.count + '</td>' +
+        '<td>' +
+          '<button class="ghost mini" data-sact="toggle" data-dir="' + esc(s.dir) + '">' + (s.enabled ? '停用' : '启用') + '</button> ' +
+          '<button class="ghost mini" data-sact="rescan" data-dir="' + esc(s.dir) + '">重扫此目录</button> ' +
+          '<button class="danger mini" data-sact="remove" data-dir="' + esc(s.dir) + '">移除</button>' +
+        '</td></tr>').join('')
+    : '<tr><td colspan="4" class="hint">还没有曲库目录，去「批量导入」或下方添加</td></tr>';
+}
+
+$('#sourceRows').addEventListener('click', async (e) => {
+  const btn = e.target.closest('button[data-sact]');
+  if (!btn) return;
+  const dir = btn.dataset.dir;
+  if (btn.dataset.sact === 'toggle') {
+    await post('/api/admin/sources', { toggle: dir });
+    toast('已切换启停状态');
+    loadSources();
+  } else if (btn.dataset.sact === 'rescan') {
+    const r = await post('/api/scan', { dirs: [dir] });
+    toast(r.started ? '已开始重扫该目录' : (r.reason || '未能开始'));
+    switchTab('import');
+  } else if (btn.dataset.sact === 'remove') {
+    if (!confirm('从曲库来源中移除该目录？\n（只删索引，不删 NAS 上的文件）')) return;
+    await post('/api/admin/sources', { remove: dir });
+    toast('已移除');
+    loadSources();
+  }
+});
+
+$('#btnSrcAdd').onclick = async () => {
+  const dir = $('#srcAdd').value.trim();
+  if (!dir) return toast('请填目录路径');
+  await post('/api/admin/sources', { add: dir });
+  $('#srcAdd').value = '';
+  toast('已添加，可点「重扫此目录」导入');
+  loadSources();
+};
+
+$('#btnSrcRescanAll').onclick = async () => {
+  const r = await post('/api/scan', {});
+  toast(r.started ? '全部重扫已开始' : (r.reason || '未能开始'));
+};
+
+/* ---- 孤儿清理 ---- */
+function applyOrphanState(o) {
+  const pct = o.total ? Math.round((o.checked / o.total) * 100) : 0;
+  $('#orphanBar').style.width = (o.running ? pct : 100) + '%';
+  if (o.running) {
+    $('#orphanMsg').textContent = '检查中… ' + o.checked + ' / ' + o.total;
+  } else if (o.finishedAt) {
+    $('#orphanMsg').textContent = '检查完成：' + o.missingCount + ' 首文件已不存在' + (o.truncated ? '（仅显示前 500 条）' : '');
+  }
+  if (Array.isArray(o.items) && !o.running) {
+    $('#orphanList').innerHTML = o.items.length
+      ? '<table><tbody>' + o.items.map((s) => '<tr>' +
+          '<td class="ell">' + esc(s.title) + '</td><td class="ell hint">' + esc(s.artist) + '</td>' +
+          '<td class="ell hint" style="max-width:320px">' + esc(s.rel || '') + '</td></tr>').join('') + '</tbody></table>' +
+        (o.missingCount ? '<div class="row" style="margin-top:8px"><button class="danger" id="btnOrphanClean">清理这 ' + o.missingCount + ' 条记录</button></div>' : '')
+      : '<p class="hint">没有发现失效文件 ✅</p>';
+    const clean = document.querySelector('#btnOrphanClean');
+    if (clean) clean.onclick = async () => {
+      if (!confirm('从曲库移除这 ' + o.missingCount + ' 条失效记录？\n（只删索引，不动文件；恢复被移除的歌曲可去「系统设置」）')) return;
+      const r = await post('/api/admin/orphans/clean', {});
+      toast('已清理 ' + r.removed + ' 条');
+      loadSongs();
+    };
+  }
+}
+
+$('#btnOrphanScan').onclick = async () => {
+  const r = await post('/api/admin/orphans', {});
+  if (!r.started) return toast(r.reason || '未能开始');
+  applyOrphanState({ running: true, checked: 0, total: 0 });
+};
+
+/* ---- 头像抓取 ---- */
+function applyAvatarState(a) {
+  const pct = a.total ? Math.round((a.done / a.total) * 100) : 0;
+  $('#avBar').style.width = pct + '%';
+  $('#avOk').textContent = '成功 ' + a.ok;
+  $('#avFail').textContent = '失败 ' + a.fail;
+  $('#avCur').textContent = a.running ? ('正在：' + a.current) : (a.finishedAt ? '完成，用时 ' + Math.round((a.costMs || 0) / 1000) + 's' : '—');
+  $('#avMsg').textContent = a.running ? ('进行中 ' + a.done + '/' + a.total) : (a.finishedAt ? '已完成' : '尚未开始');
+}
+
+$('#btnAvFetch').onclick = async () => {
+  const r = await post('/api/avatars/fetch', { force: false });
+  toast(r.started ? '开始抓取 ' + r.total + ' 位歌手' : (r.reason === 'running' ? '已经在抓了' : '未能开始'));
+};
+$('#btnAvForce').onclick = async () => {
+  if (!confirm('强制重抓全部歌手头像？（会覆盖手动上传的头像）')) return;
+  const r = await post('/api/avatars/fetch', { force: true });
+  toast(r.started ? '开始重抓 ' + r.total + ' 位歌手' : (r.reason === 'running' ? '已经在抓了' : '未能开始'));
+};
+
+async function loadMaint() {
+  await loadSources();
+  try { applyOrphanState(await api('/api/admin/orphans')); } catch {}
+  try { applyAvatarState(await api('/api/avatars/status')); } catch {}
+}
+
 /* ================= 系统设置 ================= */
 async function loadSettings() {
   const [cfg, health, favs] = await Promise.all([api('/api/settings'), api('/api/health'), api('/api/favs')]);
@@ -777,6 +947,8 @@ async function boot() {
   // 扫描进度实时推送
   const es = new EventSource('/api/events?role=admin');
   es.addEventListener('scan', (e) => applyScanState(JSON.parse(e.data)));
+  es.addEventListener('orphans', (e) => applyOrphanState(JSON.parse(e.data)));
+  es.addEventListener('avatarProgress', (e) => applyAvatarState(JSON.parse(e.data)));
   es.addEventListener('library', async () => {
     refreshCounts();
     await loadFacets();

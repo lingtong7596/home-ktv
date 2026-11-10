@@ -121,12 +121,30 @@
   .subhead { display: flex; align-items: center; gap: 8px; margin: 8px 0; }
   .subhead b { font-size: 15px; }
   .subhead .back { color: var(--acc); background: none; border: 0; font-size: 13px; cursor: pointer; }
+
+  /* ---------- 主题：深色（默认）/ 浅色 ---------- */
+  #themeBtn { border: 0; background: none; font-size: 16px; cursor: pointer; color: var(--mut); padding: 0 2px; }
+  body[data-theme="light"] {
+    --bg: #f3f5f9; --card: #ffffff; --card2: #edf0f6; --line: rgba(20,40,80,.12);
+    --txt: #1d2a44; --mut: #64718a; --acc: #e8446a; --ok: #189a5c; --gold: #d98a1f;
+  }
+  body[data-theme="light"] #topbar { background: linear-gradient(160deg, #ffffff, #eef2f8); box-shadow: 0 2px 12px rgba(20,40,80,.06); }
+  body[data-theme="light"] #tabs { background: rgba(255,255,255,.97); }
+  body[data-theme="light"] .nowcard { background: linear-gradient(140deg, #ffffff, #eef2f8); }
+  body[data-theme="light"] .qitem .prep i { background: rgba(20,40,80,.12); }
+  body[data-theme="light"] .footlink, body[data-theme="light"] .footlink a { color: #8a94a8; border-color: #c9d2e0; }
+  body[data-theme="light"] .song, body[data-theme="light"] .artist-row,
+  body[data-theme="light"] .qitem, body[data-theme="light"] .more, body[data-theme="light"] .chip,
+  body[data-theme="light"] .letters button, body[data-theme="light"] .ctl { box-shadow: 0 1px 4px rgba(20,40,80,.05); }
+  body[data-theme="light"] .tag { background: var(--card2); }
+  #npAvatar { width: 34px; height: 34px; border-radius: 50%; object-fit: cover; background: var(--card2); flex: 0 0 auto; }
 </style>
 </head>
 <body>
   <div id="topbar">
-    <div class="room"><span id="roomName">家庭KTV</span><span id="conn">● 连接中…</span></div>
+    <div class="room"><span id="roomName">家庭KTV</span><span style="display:flex;align-items:center;gap:6px"><button id="themeBtn" title="切换深浅色">☀️</button><span id="conn">● 连接中…</span></span></div>
     <div class="now">
+      <img id="npAvatar" alt="" style="display:none" />
       <div class="t">
         <div class="title" id="npTitle">暂无歌曲在唱</div>
         <div class="artist" id="npArtist">点一首歌开始吧</div>
@@ -245,6 +263,16 @@ async function api(path, opts) {
   return d;
 }
 
+/* ================ 主题（深/浅色） ================ */
+function applyTheme(t) {
+  document.body.dataset.theme = t;
+  $('#themeBtn').textContent = t === 'light' ? '🌙' : '☀️';
+  try { localStorage.setItem('ktv.mtheme', t); } catch {}
+}
+$('#themeBtn').onclick = () => {
+  applyTheme(document.body.dataset.theme === 'light' ? 'dark' : 'light');
+};
+
 /* ================ Tab ================ */
 document.querySelectorAll('#tabs button').forEach((btn) => {
   btn.onclick = () => {
@@ -278,6 +306,13 @@ function renderTop() {
   const cur = state.current;
   $('#npTitle').textContent = cur ? cur.song.title : '暂无歌曲在唱';
   $('#npArtist').textContent = cur ? cur.song.artist : '点一首歌开始吧';
+  if (cur) {
+    const main = (cur.song.artists && cur.song.artists.length ? cur.song.artists[0] : cur.song.artist) || '';
+    $('#npAvatar').src = '/api/artist-avatar?name=' + encodeURIComponent(main);
+    $('#npAvatar').style.display = '';
+  } else {
+    $('#npAvatar').style.display = 'none';
+  }
   $('#npNext').style.display = cur ? '' : 'none';
   $('#npFav').style.display = cur ? '' : 'none';
   $('#npFav').classList.toggle('on', cur ? isFav(cur.song.id) : false);
@@ -320,8 +355,9 @@ function songRow(s) {
   const isNow = !!(state.current && state.current.song.id === s.id);
   const cls = queued ? ' queued' : isNow ? ' now' : '';
   const label = queued ? '✓ 已点' + (queued > 1 ? queued : '') : isNow ? '● 演唱中' : '点歌';
+  const cover = s.artistAvatar || ('/api/avatar-placeholder.svg?name=' + encodeURIComponent((s.artists && s.artists[0]) || s.artist));
   return '<div class="song" data-id="' + s.id + '">' +
-    '<img class="cover" loading="lazy" src="/api/avatar-placeholder.svg?name=' + encodeURIComponent((s.artists && s.artists[0]) || s.artist) + '"/>' +
+    '<img class="cover" loading="lazy" src="' + cover + '"/>' +
     '<div class="mid"><div class="t">' + esc(s.title) + '</div><div class="a">' + esc(s.artist) + '</div>' +
       '<div class="tags">' + (s.lang ? '<span class="tag lang">' + esc(s.lang) + '</span>' : '') +
       (s.type ? '<span class="tag">' + esc(s.type) + '</span>' : '') +
@@ -677,6 +713,7 @@ $('#pvFull').onclick = goFullPreview;
 
 /* ================ 启动 ================ */
 (async function boot() {
+  try { applyTheme(localStorage.getItem('ktv.mtheme') || 'dark'); } catch { applyTheme('dark'); }
   if (!me) {
     const name = prompt('怎么称呼你？（点歌时会显示）') || '';
     me = name.trim().slice(0, 12);

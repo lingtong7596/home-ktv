@@ -9,6 +9,7 @@ import { Playback } from './src/playback.js';
 import { Remuxer } from './src/remux.js';
 import { createHub } from './src/events.js';
 import { scanLibrary } from './src/scanner.js';
+import { createAvatarFetcher } from './src/avatars.js';
 import { ffmpegAvailable } from './src/probe.js';
 import { qrSvg } from './src/qr.js';
 import { toPinyin } from './src/pinyin.js';
@@ -20,6 +21,7 @@ const hub = createHub();
 const library = new Library(cfg);
 const remuxer = new Remuxer(cfg);
 const playback = new Playback(cfg, library, remuxer, hub);
+const avatars = createAvatarFetcher({ library, hub, cfg });
 
 const VERSION = '1.2.0';
 const MIME = {
@@ -181,13 +183,15 @@ function serveFile(req, res, file, { download = false } = {}) {
 
 const scanState = { running: false, progress: { phase: 'idle', done: 0, total: 0, message: '' }, finishedAt: 0 };
 
-async function startScan() {
+async function startScan(dirs = null) {
   if (scanState.running) return { started: false, reason: '正在扫描中' };
-  if (!cfg.mediaDirs.length) return { started: false, reason: '尚未配置曲库目录' };
+  const targetDirs = Array.isArray(dirs) && dirs.length ? dirs : cfg.mediaDirs;
+  if (!targetDirs.length) return { started: false, reason: '尚未配置曲库目录' };
   scanState.running = true;
   scanState.progress = { phase: 'start', done: 0, total: 0, message: '开始扫描' };
   hub.broadcast('scan', scanState);
-  scanLibrary(cfg, {
+  // 单目录重扫：只换 mediaDirs，其余配置共用（结果仍合入同一个库）
+  scanLibrary({ ...cfg, mediaDirs: targetDirs }, {
     onProgress: (p) => {
       scanState.progress = p;
       hub.broadcast('scan', { running: true, progress: p });
@@ -212,6 +216,56 @@ async function startScan() {
       hub.broadcast('scan', scanState);
     });
   return { started: true };
+}
+
+/* ------------------------------ 孤儿曲目检查 ------------------------------ */
+/* 文件被删/网盘掉线后，库里会留下点进去播不了的记录。
+   这里并发 stat 一遍真实文件，把"文件已经不在了"的挑出来，后台可一键清理。 */
+
+const orphanState = {
+  running: false,
+  checked: 0,
+  total: 0,
+  missing: [],       // [{ id, title, artist, file, rel }]
+  startedAt: 0,
+  finishedAt: 0,
+  truncated: false,
+};
+
+async function startOrphanScan() {
+  if (orphanState.running) return { started: false, reason: '正在检查中' };
+  const songs = library.songs.slice();
+  Object.assign(orphanState, {
+    running: true, checked: 0, total: songs.length, missing: [], startedAt: Date.now(), finishedAt: 0, truncated: false,
+  });
+  hub.broadcast('orphans', { running: true, checked: 0, total: songs.length });
+
+  const CONCURRENCY = 12;
+  let idx = 0;
+  const missing = [];
+  const worker = async () => {
+    while (idx < songs.length) {
+      const song = songs[idx++];
+      try {
+        await fsp.stat(song.file);
+      } catch {
+        if (missing.length < 5000) {
+          missing.push({ id: song.id, title: song.title, artist: song.artist, file: song.file, rel: song.rel });
+        } else {
+          orphanState.truncated = true;
+        }
+      }
+      orphanState.checked++;
+      if (orphanState.checked % 50 === 0) hub.broadcast('orphans', { running: true, checked: orphanState.checked, total: songs.length });
+    }
+  };
+  await Promise.all(Array.from({ length: CONCURRENCY }, worker));
+  orphanState.missing = missing;
+  orphanState.running = false;
+  orphanState.finishedAt = Date.now();
+  hub.broadcast('orphans', { running: false, checked: orphanState.checked, total: songs.length, missing: missing.length });
+  log(`[orphans] 检查完成：${missing.length} / ${songs.length} 首文件已不存在`);
+  return { started: true, missing: missing.length };
 }
 
 /* ------------------------------ 路由 ------------------------------ */
@@ -327,7 +381,7 @@ const server = http.createServer(async (req, res) => {
         total: result.total,
         offset,
         limit,
-        items: result.items.map((s) => library.brief(s)),
+        items: library.withArtistAvatar(result.items.map((s) => library.brief(s))),
       });
     }
 
@@ -363,7 +417,7 @@ const server = http.createServer(async (req, res) => {
 
     /* ---- 收藏（爱心） ---- */
     if (pathname === '/api/favs' && method === 'GET') {
-      return json(res, 200, { items: library.favSongs().map((s) => library.brief(s)) });
+      return json(res, 200, { items: library.withArtistAvatar(library.favSongs().map((s) => library.brief(s))) });
     }
     if (pathname === '/api/favs/toggle' && method === 'POST') {
       const body = await readBody(req);
@@ -384,7 +438,7 @@ const server = http.createServer(async (req, res) => {
       const n = Math.min(50, Number(url.searchParams.get('n') || 20));
       const fromFavs = url.searchParams.get('from') === 'favs';
       const items = library.randomSongs(n, { fromFavs });
-      return json(res, 200, { items: items.map((s) => library.brief(s)) });
+      return json(res, 200, { items: library.withArtistAvatar(items.map((s) => library.brief(s))) });
     }
 
     /* ---- 歌星 ---- */
@@ -729,7 +783,8 @@ const server = http.createServer(async (req, res) => {
       if (['artist-title', 'title-artist'].includes(body.filenameOrder)) cfg.filenameOrder = body.filenameOrder;
       if (typeof body.deepScan === 'boolean') cfg.deepScan = body.deepScan;
       saveConfig(cfg);
-      const result = await startScan();
+      // body.dirs 传入时只扫这些目录（曲库来源面板的「重扫此目录」）
+      const result = await startScan(Array.isArray(body.dirs) && body.dirs.length ? body.dirs.map((d) => path.resolve(d)) : null);
       return json(res, 200, { ...result, filenameOrder: cfg.filenameOrder, deepScan: cfg.deepScan });
     }
 
@@ -754,6 +809,97 @@ const server = http.createServer(async (req, res) => {
       if (typeof body.filenameOrder === 'string') cfg.filenameOrder = body.filenameOrder;
       saveConfig(cfg);
       return json(res, 200, { ok: true, config: { room: cfg.roomName, mediaDirs: cfg.mediaDirs } });
+    }
+
+    /* ---- 曲库来源（后台可视化：启用/停用/单目录重扫/新增） ---- */
+    if (pathname === '/api/admin/sources') {
+      if (!requireAdmin(req, res, url)) return;
+      if (method === 'GET') {
+        const disabled = new Set(cfg.disabledDirs || []);
+        const items = cfg.mediaDirs.map((dir) => {
+          const count = library.songs.filter((s) => String(s.file || '').startsWith(dir)).length;
+          let exists = false;
+          try { exists = fs.statSync(dir).isDirectory(); } catch { exists = false; }
+          return { dir, exists, enabled: !disabled.has(dir), count };
+        });
+        return json(res, 200, { items });
+      }
+      if (method === 'POST') {
+        const body = await readBody(req);
+        if (body.add) {
+          const dir = path.resolve(String(body.add).trim());
+          if (!cfg.mediaDirs.includes(dir)) cfg.mediaDirs.push(dir);
+        }
+        if (body.remove) {
+          const dir = path.resolve(String(body.remove).trim());
+          cfg.mediaDirs = cfg.mediaDirs.filter((d) => d !== dir);
+          cfg.disabledDirs = (cfg.disabledDirs || []).filter((d) => d !== dir);
+        }
+        if (body.toggle) {
+          const dir = path.resolve(String(body.toggle).trim());
+          const set = new Set(cfg.disabledDirs || []);
+          if (set.has(dir)) set.delete(dir); else set.add(dir);
+          cfg.disabledDirs = [...set];
+        }
+        saveConfig(cfg);
+        return json(res, 200, { ok: true, mediaDirs: cfg.mediaDirs, disabledDirs: cfg.disabledDirs || [] });
+      }
+    }
+
+    /* ---- 孤儿曲目（文件已不存在）检查与清理 ---- */
+    if (pathname === '/api/admin/orphans') {
+      if (!requireAdmin(req, res, url)) return;
+      if (method === 'GET') {
+        return json(res, 200, {
+          running: orphanState.running,
+          checked: orphanState.checked,
+          total: orphanState.total,
+          finishedAt: orphanState.finishedAt,
+          truncated: orphanState.truncated,
+          items: orphanState.missing.slice(0, 500),
+          missingCount: orphanState.missing.length,
+        });
+      }
+      if (method === 'POST') {
+        return json(res, 200, await startOrphanScan());
+      }
+    }
+    if (pathname === '/api/admin/orphans/clean' && method === 'POST') {
+      if (!requireAdmin(req, res, url)) return;
+      const body = await readBody(req);
+      const ids = Array.isArray(body.ids) ? body.ids : orphanState.missing.map((m) => m.id);
+      if (!ids.length) return json(res, 200, { ok: true, removed: 0 });
+      const removed = library.removeSongs(ids);
+      orphanState.missing = orphanState.missing.filter((m) => !ids.includes(m.id));
+      playback.broadcast();
+      hub.broadcast('library', { total: library.songs.length, facets: library.langFacets() });
+      log(`[orphans] 已清理 ${removed} 条失效记录`);
+      return json(res, 200, { ok: true, removed });
+    }
+
+    /* ---- 歌手头像：自动抓取 ---- */
+    if (pathname === '/api/avatars/status') {
+      return json(res, 200, avatars.status());
+    }
+    if (pathname === '/api/avatars/fetch' && method === 'POST') {
+      if (!requireAdmin(req, res, url)) return;
+      const body = await readBody(req);
+      const r = await avatars.fetchAll({
+        force: !!body.force,
+        limit: Number(body.limit) > 0 ? Number(body.limit) : 0,
+      });
+      return json(res, 200, r);
+    }
+    const avatarFetchMatch = pathname.match(/^\/api\/artists\/([a-f0-9]+)\/avatar\/fetch$/);
+    if (avatarFetchMatch && method === 'POST') {
+      if (!requireAdmin(req, res, url)) return;
+      return json(res, 200, await avatars.fetchById(avatarFetchMatch[1]));
+    }
+    // 按歌手名取头像（歌曲列表/播放页用，未抓到时自动回退占位图）
+    if (pathname === '/api/artist-avatar') {
+      const name = url.searchParams.get('name') || '';
+      res.writeHead(302, { Location: library.avatarUrlByName(name) });
+      return res.end();
     }
 
     /* ---- 静态文件 ---- */

@@ -1,4 +1,5 @@
 import http from 'node:http';
+import https from 'node:https';
 import fs from 'node:fs';
 import fsp from 'node:fs/promises';
 import path from 'node:path';
@@ -16,6 +17,7 @@ import { qrSvg } from './src/qr.js';
 import { toPinyin } from './src/pinyin.js';
 import { shortHash } from './src/util.js';
 import { log, humanSize } from './src/util.js';
+import { ensureSelfSignedCert } from './src/certs.js';
 
 const cfg = loadConfig();
 const hub = createHub();
@@ -277,7 +279,7 @@ async function startOrphanScan() {
 
 /* ------------------------------ 路由 ------------------------------ */
 
-const server = http.createServer(async (req, res) => {
+const apiHandler = async (req, res) => {
   const url = new URL(req.url, `http://${req.headers.host || 'localhost'}`);
   const { pathname } = url;
   const method = req.method || 'GET';
@@ -359,12 +361,15 @@ const server = http.createServer(async (req, res) => {
     /* ---- 手机扫码后拿到的地址信息 ---- */
     if (pathname === '/api/remote-info') {
       const host = req.headers.host || `${lanIp()}:${cfg.port}`;
+      const h = host.includes(':') ? host.slice(0, host.indexOf(':')) : host;
       const base = `http://${host}`;
       return json(res, 200, {
         base,
         mobileUrl: `${base}/m/`,
         playerUrl: `${base}/play/`,
         adminUrl: `${base}/admin/`,
+        // 手机麦克风打分要走 https（浏览器只在安全上下文开放麦克风）
+        scoreUrl: httpsLive ? `https://${h}:${httpsPort()}/score/` : '',
         qr: `${base}/api/qr.svg?text=${encodeURIComponent(`${base}/m/`)}&scale=8`,
       });
     }
@@ -973,9 +978,16 @@ const server = http.createServer(async (req, res) => {
     if (!res.headersSent) json(res, 500, { error: err.message });
     else res.end();
   }
-});
+};
+
+const server = http.createServer(apiHandler);
 
 /* ------------------------------ 启动 ------------------------------ */
+
+// 手机麦克风打分需要 HTTPS（浏览器只在安全上下文里开放 getUserMedia），
+// 所以这里用自签证书再起一个 https 端口，和主服务共用同一套路由。
+let httpsLive = false;
+const httpsPort = () => cfg.httpsPort || cfg.port + 1;
 
 async function main() {
   const hasFfmpeg = await ffmpegAvailable(cfg.ffmpeg);
@@ -989,6 +1001,21 @@ async function main() {
     log(`  后台管理     : http://${ip}:${cfg.port}/admin/`);
     log(`  曲库         : ${library.songs.length} 首   目录：${cfg.mediaDirs.join(', ') || '（未配置）'}`);
   });
+
+  if (cfg.httpsEnabled !== false) {
+    try {
+      const tls = await ensureSelfSignedCert(cfg.dataDir);
+      if (tls) {
+        https.createServer(tls, apiHandler).listen(httpsPort(), cfg.host, () => {
+          httpsLive = true;
+          const ip = lanIp();
+          log(`  手机打分(https) : https://${ip}:${httpsPort()}/score/  （首次打开需在浏览器里「继续访问」自签证书）`);
+        });
+      }
+    } catch (err) {
+      log('[https] 启动失败，手机打分不可用:', err.message);
+    }
+  }
 
   if (cfg.autoScanOnStart && cfg.mediaDirs.length) {
     const stale = !library.songs.length || Date.now() - library.updatedAt > 12 * 3600 * 1000;

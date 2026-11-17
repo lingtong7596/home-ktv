@@ -1,5 +1,7 @@
 {
   "port": 9188,
+  "httpsPort": 0,
+  "httpsEnabled": true,
   "mediaDirs": [
     "/vol1/1000/ktv歌库"
   ],

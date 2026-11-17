@@ -7,6 +7,10 @@ export const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '
 export const DEFAULT_CONFIG = {
   port: 9188,
   host: '0.0.0.0',
+  // 手机麦克风打分需要的 https 端口（0 = 自动用 port+1），
+  // 用自签证书，浏览器首次打开会提示不安全，选「继续访问」即可
+  httpsPort: 0,
+  httpsEnabled: true,
   roomName: '客厅',
   // 曲库目录：飞牛 NAS 上存放 KTV 视频的路径，可配置多个（本地盘 + 网盘可混用）
   mediaDirs: [],

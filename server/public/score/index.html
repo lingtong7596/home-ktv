@@ -1,0 +1,273 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+<title>家庭 KTV · 麦克风打分</title>
+<style>
+  :root { --bg:#0f1117; --card:#171923; --card2:#1f2230; --txt:#eef1f7; --mut:#8f97a8; --acc:#ff4d6d; --ok:#37d67a; --gold:#ffb347; }
+  * { box-sizing:border-box; margin:0; padding:0; }
+  body { background:linear-gradient(160deg,#1b1d2a,#12141d); color:var(--txt); font-family:-apple-system,'PingFang SC','Microsoft YaHei',sans-serif;
+         min-height:100vh; padding:14px 14px 90px; }
+  h1 { font-size:19px; padding:6px 0 2px; }
+  .sub { color:var(--mut); font-size:12.5px; margin-bottom:12px; }
+  .card { background:rgba(23,25,35,.92); border:1px solid #262a38; border-radius:16px; padding:16px; margin-bottom:12px; }
+  .song { display:flex; align-items:center; gap:12px; }
+  .song .t { font-size:18px; font-weight:700; }
+  .song .a { color:var(--mut); font-size:13px; margin-top:2px; }
+  .meter { margin-top:14px; }
+  .mlabel { display:flex; justify-content:space-between; font-size:12.5px; color:var(--mut); margin-bottom:6px; }
+  .bar { height:14px; background:#101320; border-radius:8px; overflow:hidden; }
+  .bar i { display:block; height:100%; width:0%; background:linear-gradient(90deg,#37d67a,#ffb347,#ff4d6d); border-radius:8px; transition:width .12s linear; }
+  .live { display:flex; align-items:baseline; gap:8px; margin-top:12px; }
+  .live b { font-size:40px; color:var(--gold); font-variant-numeric:tabular-nums; }
+  .live span { color:var(--mut); font-size:12.5px; }
+  button { border:0; border-radius:14px; padding:14px 18px; font-size:16px; font-weight:700; color:#fff;
+           background:var(--acc); width:100%; }
+  button.ghost { background:var(--card2); border:1px solid #3a3f52; color:var(--txt); }
+  button:disabled { opacity:.45; }
+  .big { text-align:center; padding:10px 0 4px; }
+  .big b { font-size:72px; color:var(--gold); font-variant-numeric:tabular-nums; }
+  .big p { color:var(--txt); font-size:16px; margin-top:2px; }
+  .rows { margin-top:12px; }
+  .row { margin-bottom:10px; }
+  .row .k { display:flex; justify-content:space-between; font-size:12.5px; color:var(--mut); margin-bottom:4px; }
+  .row .k b { color:var(--txt); font-variant-numeric:tabular-nums; }
+  .row .bar { height:8px; }
+  .row .bar i { background:var(--acc); }
+  .tip { color:var(--mut); font-size:12px; line-height:1.7; }
+  .warn { background:rgba(255,77,109,.12); border:1px solid rgba(255,77,109,.4); }
+  .hide { display:none; }
+</style>
+</head>
+<body>
+  <h1>🎤 麦克风打分</h1>
+  <div class="sub">手机放在唱歌的人旁边 · 实时听你唱得响不响、稳不稳</div>
+
+  <div id="errBox" class="card warn hide">
+    <p id="errText" class="tip" style="color:var(--txt)"></p>
+  </div>
+
+  <div class="card" id="songCard">
+    <div class="song">
+      <div>
+        <div class="t" id="songTitle">正在读取…</div>
+        <div class="a" id="songArtist"></div>
+      </div>
+    </div>
+    <div class="meter">
+      <div class="mlabel"><span>现场音量</span><span id="dbLabel">—</span></div>
+      <div class="bar"><i id="volBar"></i></div>
+    </div>
+    <div class="live"><b id="liveScore">--</b><span>当前表现分（唱完出总分）</span></div>
+  </div>
+
+  <div class="card hide" id="resultCard">
+    <div class="big"><b id="finalScore">0</b><p id="finalComment"></p></div>
+    <div class="rows">
+      <div class="row"><div class="k"><span>🔥 演唱投入（唱了多久）</span><b id="kAct">-</b></div><div class="bar"><i id="bAct"></i></div></div>
+      <div class="row"><div class="k"><span>📣 声音力度（唱得响不响）</span><b id="kLoud">-</b></div><div class="bar"><i id="bLoud"></i></div></div>
+      <div class="row"><div class="k"><span>🎵 音线稳定（音准/颤音控制）</span><b id="kPitch">-</b></div><div class="bar"><i id="bPitch"></i></div></div>
+      <div class="row"><div class="k"><span>🥁 节奏感（句读分明）</span><b id="kRhythm">-</b></div><div class="bar"><i id="bRhythm"></i></div></div>
+    </div>
+    <p class="tip" style="margin-top:8px">娱乐评分，图个开心：唱得投入、声音稳、一句一句有板有眼，分就高。间奏和聊天不算分。</p>
+  </div>
+
+  <button id="startBtn">🎤 开始打分</button>
+  <button id="stopBtn" class="ghost hide" style="margin-top:10px">⏹ 结束并出分</button>
+  <button id="againBtn" class="ghost hide" style="margin-top:10px">🔄 再唱一次</button>
+
+  <p class="tip" style="margin-top:12px">说明：这首歌切走或唱完时自动出分。手机要靠近唱歌的人（1~2 米内），离太远分不清人声和伴奏。</p>
+
+<script>
+(async function () {
+  const $ = (s) => document.querySelector(s);
+  const clamp01 = (x) => Math.min(1, Math.max(0, x));
+  const pct = (x) => Math.round(clamp01(x) * 100) + '%';
+
+  /* ---- 必须在 https 安全上下文里才能用麦克风 ---- */
+  if (location.protocol !== 'https:') {
+    try {
+      const info = await fetch('/api/remote-info').then((r) => r.json());
+      if (info.scoreUrl && info.scoreUrl !== location.href) { location.replace(info.scoreUrl); return; }
+    } catch (e) { /* 忽略，走下面的错误提示 */ }
+    return fail('麦克风打分必须用 HTTPS 打开。请从手机点歌台「已点」页的「打分」按钮进入（会自动跳到 https 地址），浏览器提示不安全时选「高级 → 继续访问」。');
+  }
+
+  let state = null;
+  let startQid = null;
+  let running = false;
+  let finished = false;
+  let audioCtx = null, analyser = null, micStream = null;
+
+  /* ---- 采样聚合 ---- */
+  const S = freshStats();
+  function freshStats() {
+    return { total: 0, active: 0, rmsSum: 0, rmsPeak: 0, pitchN: 0, claritySum: 0,
+             bursts: 0, wasActive: false, activeRun: 0, runLens: [], hist: [] };
+  }
+
+  async function loadState() {
+    try { state = await fetch('/api/state').then((r) => r.json()); } catch (e) { state = null; }
+    const cur = state && state.current;
+    if (cur) {
+      $('#songTitle').textContent = cur.song.title;
+      $('#songArtist').textContent = cur.song.artist + (cur.by ? ' · ' + cur.by + ' 点的' : '') +
+        ' · ' + (cur.paused ? '已暂停' : '演唱中');
+    } else {
+      $('#songTitle').textContent = '空闲中，没有歌在唱';
+      $('#songArtist').textContent = '先去点一首歌，再回来打分';
+    }
+    return cur;
+  }
+
+  function fail(msg) {
+    $('#errBox').classList.remove('hide');
+    $('#errText').textContent = msg;
+    $('#startBtn').disabled = true;
+  }
+
+  await loadState();
+  setInterval(async () => {
+    await loadState();
+    if (!running || finished) return;
+    const cur = state && state.current;
+    // 这首歌切走了 / 唱完了：自动出分
+    if (!cur || (startQid && cur.qid !== startQid)) stopScoring(true);
+  }, 2000);
+
+  /* ---- 音高检测（自相关法，无依赖） ---- */
+  function detectPitch(buf) {
+    const n = buf.length;
+    let energy = 0;
+    for (let i = 0; i < n; i++) energy += buf[i] * buf[i];
+    const rms = Math.sqrt(energy / n);
+    if (rms < 0.006 || energy <= 0) return { rms, freq: 0, clarity: 0 };
+    let maxv = -1, maxp = -1;
+    for (let lag = 40; lag < n / 2; lag++) {   // 40 采样 ≈ 1100Hz 上限
+      let sum = 0;
+      for (let i = 0; i < n - lag; i++) sum += buf[i] * buf[i + lag];
+      if (sum > maxv) { maxv = sum; maxp = lag; }
+    }
+    const clarity = clamp01(maxv / energy);   // 周期性越好越接近 1
+    return { rms, freq: maxp > 0 ? audioCtx.sampleRate / maxp : 0, clarity };
+  }
+
+  async function startScoring() {
+    if (running) return;
+    const cur = await loadState();
+    if (!cur) return fail('现在没有歌在唱，先去点一首歌吧');
+    startQid = cur.qid;
+    try {
+      micStream = await navigator.mediaDevices.getUserMedia({
+        audio: { echoCancellation: false, noiseSuppression: false, autoGainControl: true },
+      });
+    } catch (e) {
+      return fail('拿不到麦克风权限：' + e.message + '。请确认浏览器允许本页面使用麦克风。');
+    }
+    audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+    const src = audioCtx.createMediaStreamSource(micStream);
+    analyser = audioCtx.createAnalyser();
+    analyser.fftSize = 2048;
+    src.connect(analyser);
+
+    Object.assign(S, freshStats());
+    finished = false;
+    running = true;
+    $('#startBtn').classList.add('hide');
+    $('#stopBtn').classList.remove('hide');
+    $('#resultCard').classList.add('hide');
+    $('#songTitle').textContent = cur.song.title;
+    $('#songArtist').textContent = cur.song.artist + ' · 打分中…';
+    tick();
+  }
+
+  function tick() {
+    if (!running) return;
+    const buf = new Float32Array(analyser.fftSize);
+    analyser.getFloatTimeDomainData(buf);
+    const { rms, clarity } = detectPitch(buf);
+
+    // 动态噪声底：最近 10 秒音量的低分位
+    S.hist.push(rms);
+    if (S.hist.length > 100) S.hist.shift();
+    const sorted = [...S.hist].sort((a, b) => a - b);
+    const noise = sorted[Math.floor(sorted.length * 0.2)] || 0.001;
+
+    const active = rms > Math.max(noise * 3.5, 0.015);
+    S.total++;
+    if (active) {
+      S.active++;
+      S.rmsSum += rms;
+      S.rmsPeak = Math.max(S.rmsPeak, rms);
+      if (clarity > 0.45) { S.pitchN++; S.claritySum += clarity; }
+    }
+    if (active !== S.wasActive) {
+      if (active) S.bursts++;
+      else if (S.activeRun > 0) S.runLens.push(S.activeRun);
+      S.activeRun = 0;
+      S.wasActive = active;
+    } else if (active) S.activeRun++;
+
+    // 界面刷新
+    $('#volBar').style.width = pct(clamp01(rms * 6));
+    $('#dbLabel').textContent = active ? '🎤 检测到人声' : '（间奏 / 安静）';
+    const m = metrics();
+    $('#liveScore').textContent = m.total > 30 ? m.score : '--';
+    if (running) setTimeout(tick, 100);
+  }
+
+  function metrics() {
+    const act = S.total ? S.active / S.total : 0;
+    const meanRms = S.active ? S.rmsSum / S.active : 0;
+    const clarity = S.pitchN ? S.claritySum / S.pitchN : 0;
+    const minutes = Math.max(S.total / 600, 0.1);   // 100ms 一个样本
+    // 句读：每分钟有效起唱段数（正常唱歌 8~18 句/分钟）
+    const burstsPerMin = S.bursts / minutes;
+    const mAct = clamp01(act / 0.6);                // 唱满 60% 时间 = 满分
+    const mLoud = clamp01((meanRms - 0.03) / 0.14);
+    const mPitch = clamp01((clarity - 0.55) / 0.32);
+    const mRhythm = clamp01(burstsPerMin / 14);
+    const score = Math.round(60 + 20 * mAct + 10 * mLoud + 8 * mPitch);
+    return { score: Math.min(98, Math.max(60, score)), mAct, mLoud, mPitch, mRhythm,
+             act, meanRms, clarity, burstsPerMin };
+  }
+
+  function stopScoring(auto) {
+    if (!running) return;
+    running = false;
+    finished = true;
+    try { micStream && micStream.getTracks().forEach((t) => t.stop()); } catch (e) {}
+    try { audioCtx && audioCtx.close(); } catch (e) {}
+    const m = metrics();
+    $('#finalScore').textContent = m.score;
+    $('#finalComment').textContent =
+      m.score >= 92 ? '🏆 金嗓奖！今晚的麦霸就是你' :
+      m.score >= 85 ? '🔥 麦霸水准，观众已嗨' :
+      m.score >= 78 ? '👏 有点意思，再来一首更炸的' :
+      m.score >= 70 ? '🎤 踏入歌坛第一步' :
+      '💪 热爱可抵岁月漫长，再练练';
+    $('#kAct').textContent = pct(m.mAct);
+    $('#kLoud').textContent = pct(m.mLoud);
+    $('#kPitch').textContent = pct(m.mPitch);
+    $('#kRhythm').textContent = pct(m.mRhythm);
+    $('#bAct').style.width = pct(m.mAct);
+    $('#bLoud').style.width = pct(m.mLoud);
+    $('#bPitch').style.width = pct(m.mPitch);
+    $('#bRhythm').style.width = pct(m.mRhythm);
+    $('#resultCard').classList.remove('hide');
+    $('#stopBtn').classList.add('hide');
+    $('#againBtn').classList.remove('hide');
+    $('#startBtn').classList.remove('hide');
+    $('#startBtn').textContent = auto ? '🎤 下一首继续打分' : '🎤 重新打分';
+    $('#songArtist').textContent = ($('#songArtist').textContent || '') + (auto ? ' · 已自动出分' : '');
+    $('#liveScore').textContent = m.score;
+  }
+
+  $('#startBtn').onclick = startScoring;
+  $('#stopBtn').onclick = () => stopScoring(false);
+  $('#againBtn').onclick = () => { $('#resultCard').classList.add('hide'); startScoring(); };
+})();
+</script>
+</body>
+</html>

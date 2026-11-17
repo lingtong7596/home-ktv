@@ -588,6 +588,7 @@ function renderQueue() {
       '<div class="ops">' +
         '<button class="ctl pri" data-act="next">切歌 ▶︎</button>' +
         '<button class="ctl" data-act="replay">重唱 ↻</button>' +
+        '<button class="ctl" data-act="score">打分 🎤</button>' +
         (cur.trackCount > 1 ? '<button class="ctl" data-act="track">' + (cur.trackRole === 'acc' ? '切原唱 🎤' : '切伴唱 🎤') + '</button>' : '') +
         '<button class="ctl" data-act="pause">' + (cur.paused ? '继续' : '暂停') + '</button>' +
       '</div></div>'
@@ -621,6 +622,7 @@ $('#view-queue').addEventListener('click', async (e) => {
   const a = act.dataset.act;
   if (a === 'next') return api('/api/player/next', { method: 'POST' });
   if (a === 'replay') { await api('/api/player/replay', { method: 'POST' }); return toast('重唱！从头开始 ↻'); }
+  if (a === 'score') { location.href = '/score/'; return; }
   if (a === 'track') return api('/api/player/toggle-track', { method: 'POST' });
   if (a === 'pause') return api('/api/player/toggle', { method: 'POST' });
   const qid = act.closest('.qitem') && act.closest('.qitem').dataset.qid;

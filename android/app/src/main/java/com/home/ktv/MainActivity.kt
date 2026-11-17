@@ -48,8 +48,8 @@ import java.util.concurrent.TimeUnit
  *
  * 遥控器键位（家庭 KTV 习惯，整机只有这一个 App）：
  *   OK          播放 / 暂停（不弹系统控制器）
- *   ←           双击=重唱     长按 ←   2 倍速快退
- *   →           双击=切歌     长按 →   2 倍速快进
+ *   ←           双击=重唱     长按 ←   4 倍速快退
+ *   →           双击=切歌     长按 →   4 倍速快进
  *   ↑           切换原唱 / 伴唱
  *   ↓           显示 / 隐藏操作菜单（唯一一组控制按钮，平时不占屏幕）
  *   功能键(MENU) 播放页=已点列表开关；点歌台内=依次切换大类（歌名→歌星→排行→收藏→已点）
@@ -917,11 +917,11 @@ class MainActivity : AppCompatActivity() {
         return super.onKeyUp(keyCode, event)
     }
 
-    /** 2 倍速快进/快退：每 250ms 走 0.5 秒，同时把进度条亮出来 */
+    /** 4 倍速快进/快退：每 250ms 走 1 秒，同时把进度条亮出来 */
     private fun startSeek(dir: Int) {
         seekDir = dir
         showProgress()
-        toastMsg(if (dir > 0) "⏩ 快进 ×2" else "⏪ 快退 ×2")
+        toastMsg(if (dir > 0) "⏩ 快进 ×4" else "⏪ 快退 ×4")
         main.removeCallbacks(seekTicker)
         main.post(seekTicker)
     }
@@ -931,7 +931,7 @@ class MainActivity : AppCompatActivity() {
             if (seekDir == 0) return
             val dur = try { player.duration } catch (e: Exception) { 0L }
             val max = if (dur > 0) dur else Long.MAX_VALUE
-            val target = (player.currentPosition + seekDir * 500L).coerceIn(0L, max)
+            val target = (player.currentPosition + seekDir * 1000L).coerceIn(0L, max)
             player.seekTo(target)
             updateProgress()
             main.postDelayed(this, 250)

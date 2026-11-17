@@ -277,7 +277,7 @@
                     android:lineSpacingExtra="6dp"
                     android:textColor="#9aa3b5"
                     android:textSize="12.5sp"
-                    android:text="OK　　暂停 / 播放\n←　　双击 重唱（长按快退×2）\n→　　双击 切歌（长按快进×2）\n↑　　原唱 / 伴唱\n↓　　操作菜单\n功能键　切换大类 / 已点\n返回　　回播放页（歌不停）" />
+                    android:text="OK　　暂停 / 播放\n←　　双击 重唱（长按快退×4）\n→　　双击 切歌（长按快进×4）\n↑　　原唱 / 伴唱\n↓　　操作菜单\n功能键　切换大类 / 已点\n返回　　回播放页（歌不停）" />
             </LinearLayout>
         </LinearLayout>
 
@@ -422,7 +422,7 @@
             android:lineSpacingExtra="5dp"
             android:shadowColor="#b0000000"
             android:shadowRadius="6"
-            android:text="OK　　暂停 / 播放\n←　　双击 重唱（长按快退×2）\n→　　双击 切歌（长按快进×2）\n↑　　原唱 / 伴唱\n↓　　操作菜单\n功能键　切换大类 / 已点\n返回　　回播放页（歌不停）"
+            android:text="OK　　暂停 / 播放\n←　　双击 重唱（长按快退×4）\n→　　双击 切歌（长按快进×4）\n↑　　原唱 / 伴唱\n↓　　操作菜单\n功能键　切换大类 / 已点\n返回　　回播放页（歌不停）"
             android:textColor="#ffffff"
             android:textSize="12sp" />
     </LinearLayout>

@@ -17,7 +17,7 @@ import { qrSvg } from './src/qr.js';
 import { toPinyin } from './src/pinyin.js';
 import { shortHash } from './src/util.js';
 import { log, humanSize } from './src/util.js';
-import { ensureSelfSignedCert } from './src/certs.js';
+import { ensureCerts, caPemPath } from './src/certs.js';
 
 const cfg = loadConfig();
 const hub = createHub();
@@ -370,8 +370,23 @@ const apiHandler = async (req, res) => {
         adminUrl: `${base}/admin/`,
         // 手机麦克风打分要走 https（浏览器只在安全上下文开放麦克风）
         scoreUrl: httpsLive ? `https://${h}:${httpsPort()}/score/` : '',
+        certUrl: `${base}/ktv-ca.crt`,
         qr: `${base}/api/qr.svg?text=${encodeURIComponent(`${base}/m/`)}&scale=8`,
       });
+    }
+
+    /* ---- 根证书下载（手机装一次，麦克风才免警告可用） ---- */
+    if (pathname === '/ktv-ca.crt' || pathname === '/ktv-ca.pem') {
+      const f = caPemPath(cfg.dataDir);
+      if (!f) return json(res, 404, { error: '证书还没生成（重启服务后再试）' });
+      const pem = fs.readFileSync(f);
+      res.writeHead(200, {
+        'Content-Type': 'application/x-x509-ca-cert',
+        'Content-Disposition': 'attachment; filename="ktv-ca.crt"',
+        'Content-Length': pem.length,
+        'Cache-Control': 'no-store',
+      });
+      return res.end(pem);
     }
 
     /* ---- 曲库 ---- */
@@ -1004,12 +1019,13 @@ async function main() {
 
   if (cfg.httpsEnabled !== false) {
     try {
-      const tls = await ensureSelfSignedCert(cfg.dataDir);
+      const tls = await ensureCerts(cfg.dataDir, [lanIp()]);
       if (tls) {
         https.createServer(tls, apiHandler).listen(httpsPort(), cfg.host, () => {
           httpsLive = true;
           const ip = lanIp();
-          log(`  手机打分(https) : https://${ip}:${httpsPort()}/score/  （首次打开需在浏览器里「继续访问」自签证书）`);
+          log(`  手机打分(https) : https://${ip}:${httpsPort()}/score/`);
+          log(`  手机根证书     : http://${ip}:${cfg.port}/ktv-ca.crt  （手机装一次，麦克风才可用）`);
         });
       }
     } catch (err) {

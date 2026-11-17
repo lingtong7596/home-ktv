@@ -440,6 +440,8 @@ async function loadSong(cur) {
 function estimatePosition() {
   const cur = state && state.current;
   if (!cur) return 0;
+  // 服务端已经用 NAS 的时钟算好了真实进度；本机时钟可能差几十秒，不能自己外推
+  if (typeof cur.positionNow === 'number') return cur.positionNow;
   if (cur.paused) return cur.position || 0;
   return (cur.position || 0) + Math.max(0, (Date.now() - (cur.positionAt || Date.now())) / 1000);
 }
@@ -520,7 +522,8 @@ function startReport() {
     fetch('/api/player/report', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ position: video.currentTime }),
+      // 带上 songId：切歌瞬间旧播放器的上报不能被记到新歌头上
+      body: JSON.stringify({ position: video.currentTime, songId: state.current.song.id }),
     }).catch(() => {});
   }, 2500);
 }
@@ -535,7 +538,7 @@ video.addEventListener('ended', () => {
   fetch('/api/player/report', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ ended: true }),
+    body: JSON.stringify({ ended: true, songId: (state.current && state.current.song.id) || '' }),
   }).catch(() => {});
 });
 

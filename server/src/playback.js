@@ -229,6 +229,9 @@ export class Playback {
           paused: current.paused,
           position: current.position || 0,
           positionAt: current.positionAt || Date.now(),
+          // 服务端时钟算好的真实进度。客户端**不要**再拿本机时间减 positionAt 外推：
+          // 投影仪/手机时钟和 NAS 差几十秒是常事，一外推就把新歌直接 seek 到"半中间"。
+          positionNow: this.currentPosition(),
           duration: song.duration || 0,
           token: current.token,
           startedAt: current.startedAt,
@@ -447,14 +450,23 @@ export class Playback {
    * 播放器每 2.5 秒的自动上报只用来校准进度。以前会让 paused 参与覆盖，结果
    * "点暂停 -> 上报还在播 -> 服务端改回播放 -> 2 秒后自己又播起来"，
    * 这就是网页端点暂停只能停两秒的根因。
+   *
+   * 另外必须校验 songId / token：切歌那一刻旧播放器的上报还在路上（带着上一首的
+   * 3 分 20 秒），以前不看这两个字段，直接把新歌的进度写成 3:20，新歌就从半中间开播。
+   * 客户端没带 songId（老版本网页端）时按老逻辑接受，避免兼容问题。
    */
-  report({ position, paused, ended }) {
+  report({ position, paused, ended, songId, token }) {
     if (!this.current) return;
+    const stale =
+      (songId && songId !== this.current.songId) ||
+      (token != null && Number(token) !== this.current.token);
     if (ended) {
+      if (stale) return;
       this.next();
       return;
     }
-    if (typeof position === 'number' && Number.isFinite(position)) {
+    if (stale) return;
+    if (typeof position === 'number' && Number.isFinite(position) && position >= 0) {
       this.current.position = position;
       this.current.positionAt = Date.now();
     }

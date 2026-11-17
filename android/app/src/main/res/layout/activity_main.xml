@@ -181,7 +181,7 @@
                     android:paddingBottom="10dp" />
             </ScrollView>
 
-            <!-- 中：字母 / 数字索引（大按钮网格，每行 5 个） -->
+            <!-- 中：字母 / 数字索引（大按钮网格，每行 5 个）+ 首字母输入框 -->
             <LinearLayout
                 android:layout_width="0dp"
                 android:layout_height="match_parent"
@@ -192,13 +192,48 @@
                 android:paddingRight="8dp"
                 android:paddingTop="6dp">
 
-                <TextView
-                    android:layout_width="wrap_content"
+                <!-- 首字母输入框：连点字母在这里累积，按 ⌫ 退格、清 清空 -->
+                <LinearLayout
+                    android:layout_width="match_parent"
                     android:layout_height="wrap_content"
-                    android:text="按首字母"
-                    android:textColor="#6b7385"
-                    android:textSize="12sp"
-                    android:layout_marginBottom="4dp" />
+                    android:gravity="center_vertical"
+                    android:orientation="horizontal"
+                    android:layout_marginBottom="6dp">
+
+                    <TextView
+                        android:id="@+id/initialsBox"
+                        android:layout_width="0dp"
+                        android:layout_height="wrap_content"
+                        android:layout_weight="1"
+                        android:background="#1f2230"
+                        android:ellipsize="start"
+                        android:gravity="center_vertical"
+                        android:maxLines="1"
+                        android:minHeight="42dp"
+                        android:paddingLeft="10dp"
+                        android:paddingRight="10dp"
+                        android:singleLine="true"
+                        android:text="首字母"
+                        android:textColor="#ffb347"
+                        android:textSize="17sp"
+                        android:textStyle="bold" />
+
+                    <Button
+                        android:id="@+id/btnInitialDel"
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:layout_marginLeft="6dp"
+                        android:text="⌫"
+                        android:textSize="15sp" />
+
+                    <Button
+                        android:id="@+id/btnInitialClear"
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:layout_marginLeft="6dp"
+                        android:text="清"
+                        android:textSize="15sp" />
+                </LinearLayout>
 
                 <LinearLayout
                     android:id="@+id/lettersGrid"
@@ -468,6 +503,55 @@
         </ScrollView>
     </LinearLayout>
 
+    <!-- 播放进度条：长按快进/快退、按 ↓ 出菜单时显示（平时不占画面） -->
+    <LinearLayout
+        android:id="@+id/progressPanel"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_gravity="bottom"
+        android:layout_marginLeft="36dp"
+        android:layout_marginRight="36dp"
+        android:layout_marginBottom="100dp"
+        android:background="#e6121420"
+        android:gravity="center_vertical"
+        android:orientation="horizontal"
+        android:paddingLeft="20dp"
+        android:paddingRight="20dp"
+        android:paddingTop="10dp"
+        android:paddingBottom="10dp"
+        android:visibility="gone">
+
+        <TextView
+            android:id="@+id/progNow"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="00:00"
+            android:textColor="#ffffff"
+            android:textSize="15sp"
+            android:textStyle="bold" />
+
+        <ProgressBar
+            android:id="@+id/progBar"
+            style="?android:attr/progressBarStyleHorizontal"
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_marginLeft="16dp"
+            android:layout_marginRight="16dp"
+            android:layout_weight="1"
+            android:max="1000"
+            android:progress="0"
+            android:progressBackgroundTint="#3a3f52"
+            android:progressTint="#ff4d6d" />
+
+        <TextView
+            android:id="@+id/progAll"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="00:00"
+            android:textColor="#8f97a8"
+            android:textSize="15sp" />
+    </LinearLayout>
+
     <!-- 方向下键弹出的操作菜单（播放页唯一的一组控制按钮，只在按键时出现） -->
     <HorizontalScrollView
         android:id="@+id/actionMenu"
@@ -546,6 +630,14 @@
                 android:layout_height="wrap_content"
                 android:layout_marginLeft="8dp"
                 android:text="🎵 点歌台"
+                android:textSize="14sp" />
+
+            <Button
+                android:id="@+id/amExit"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_marginLeft="8dp"
+                android:text="⏻ 关闭系统"
                 android:textSize="14sp" />
         </LinearLayout>
     </HorizontalScrollView>

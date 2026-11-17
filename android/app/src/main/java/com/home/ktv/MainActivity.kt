@@ -9,6 +9,7 @@ import android.graphics.drawable.GradientDrawable
 import android.os.Bundle
 import android.os.Handler
 import android.os.Looper
+import android.os.Process
 import android.view.Gravity
 import android.view.KeyEvent
 import android.view.View
@@ -112,6 +113,12 @@ class MainActivity : AppCompatActivity() {
     private lateinit var queueBadge: TextView
     private lateinit var actionMenu: View
 
+    // 播放进度条（长按快进/快退、按 ↓ 出菜单时显示）
+    private lateinit var progressPanel: View
+    private lateinit var progBar: android.widget.ProgressBar
+    private lateinit var progNow: TextView
+    private lateinit var progAll: TextView
+
     // 点歌台
     private lateinit var browserPanel: LinearLayout
     private lateinit var browserTitle: TextView
@@ -119,6 +126,7 @@ class MainActivity : AppCompatActivity() {
     private lateinit var chipsRow: LinearLayout
     private lateinit var lettersGrid: LinearLayout
     private lateinit var listContainer: LinearLayout
+    private lateinit var initialsBox: TextView
 
     private var serverBase = ""
     private var lastToken = -1
@@ -132,6 +140,15 @@ class MainActivity : AppCompatActivity() {
     private var hasCurrent = false
     private var errorShown = false
     private var compatMode = false
+
+    // 本机播放器里"现在装的是哪首、哪一轮"：上报进度必须带上，
+    // 否则切歌瞬间旧播放器的上报会被记到新歌头上（新歌从半中间开播的根因之一）
+    private var mediaSongId = ""
+    private var mediaToken = -1
+    // 上一次已经加载过的 qid：qid 变了才是"新歌"，必须从 0 开始；
+    // qid 没变（切原唱/伴唱、重唱、重连）才按服务端进度续播
+    private var loadedQid = ""
+    private var playerReleased = false
 
     // 长按左右快进快退
     private var seekDir = 0
@@ -153,7 +170,11 @@ class MainActivity : AppCompatActivity() {
 
     private enum class Tab(val label: String) { SONGS("歌名"), ARTISTS("歌星"), HOT("排行"), FAVS("收藏"), QUEUE("已点") }
     private var tab = Tab.SONGS
-    private var letter = ""
+    // 首字母输入框里的内容（连点字母累积，如 sldya → 死了都要爱）
+    private var initials = ""
+    // 列表刷新完要不要把光标抢到第一首上：连续输入首字母时不能抢，
+    // 否则每按一个字母光标就跳到列表，根本没法接着输
+    private var focusListAfterLoad = true
     private var lang = ""
     private var type = ""
     private var region = ""
@@ -185,8 +206,13 @@ class MainActivity : AppCompatActivity() {
         trackBadge = findViewById(R.id.trackBadge)
         queueBadge = findViewById(R.id.queueBadge)
         actionMenu = findViewById(R.id.actionMenu)
+        progressPanel = findViewById(R.id.progressPanel)
+        progBar = findViewById(R.id.progBar)
+        progNow = findViewById(R.id.progNow)
+        progAll = findViewById(R.id.progAll)
         browserPanel = findViewById(R.id.browserPanel)
         browserTitle = findViewById(R.id.browserTitle)
+        initialsBox = findViewById(R.id.initialsBox)
         tabRow = findViewById(R.id.tabRow)
         chipsRow = findViewById(R.id.chipsRow)
         lettersGrid = findViewById(R.id.lettersGrid)
@@ -259,11 +285,20 @@ class MainActivity : AppCompatActivity() {
     private fun styleAllButtons() {
         listOf(
             R.id.btnBrowserClose, R.id.btnOpenBrowser, R.id.btnSettings,
-            R.id.btnQShuffle, R.id.btnQClear,
+            R.id.btnQShuffle, R.id.btnQClear, R.id.btnInitialDel, R.id.btnInitialClear,
             R.id.amPause, R.id.amNext, R.id.amReplay, R.id.amTrack, R.id.amRewind,
-            R.id.amForward, R.id.amFav, R.id.amSongs,
+            R.id.amForward, R.id.amFav, R.id.amSongs, R.id.amExit,
         ).forEach { id ->
             (findViewById<View>(id) as? Button)?.let { styleButton(it) }
+        }
+        // 退格/清空两个按钮压扁一点，给首字母输入框腾地方（中间列本来就窄）
+        listOf(R.id.btnInitialDel, R.id.btnInitialClear).forEach { id ->
+            (findViewById<View>(id) as? Button)?.let {
+                it.minWidth = 0
+                it.minimumWidth = 0
+                it.setPadding(dp(6), dp(6), dp(6), dp(6))
+                it.textSize = 14f
+            }
         }
     }
 
@@ -282,7 +317,9 @@ class MainActivity : AppCompatActivity() {
             override fun onPlaybackStateChanged(playbackState: Int) {
                 if (playbackState == Player.STATE_READY) applyAudioTrack(pendingTrack)
                 if (playbackState == Player.STATE_ENDED) {
-                    Thread { post("/api/player/report", """{"ended":true}""") }.start()
+                    // 带 songId/token：服务端只认"当前这一首"的播完事件，避免连跳两首
+                    val body = """{"ended":true,"songId":"$mediaSongId","token":$mediaToken}"""
+                    Thread { post("/api/player/report", body) }.start()
                 }
             }
 
@@ -304,8 +341,8 @@ class MainActivity : AppCompatActivity() {
 
         main.postDelayed(object : Runnable {
             override fun run() {
-                if (player.isPlaying) {
-                    val body = """{"position":${player.currentPosition / 1000.0}}"""
+                if (player.isPlaying && mediaSongId.isNotEmpty()) {
+                    val body = """{"position":${player.currentPosition / 1000.0},"songId":"$mediaSongId","token":$mediaToken}"""
                     Thread { post("/api/player/report", body) }.start()
                 }
                 main.postDelayed(this, 2500)
@@ -323,7 +360,7 @@ class MainActivity : AppCompatActivity() {
             .build()
     }
 
-    private fun loadSong(songId: String, seekTo: Double, track: Int, forceCompat: Boolean = false) {
+    private fun loadSong(songId: String, seekTo: Double, track: Int, forceCompat: Boolean = false, token: Int = lastToken) {
         val seq = ++loadSeq
         compatMode = forceCompat
         main.post {
@@ -394,10 +431,19 @@ class MainActivity : AppCompatActivity() {
 
             main.post {
                 pendingTrack = track
+                mediaSongId = songId
+                mediaToken = token
                 player.setMediaItem(MediaItem.fromUri(serverBase + url))
                 player.prepare()
-                if (seekTo > 1) player.seekTo((seekTo * 1000).toLong())
-                player.play()
+                // 只在"续播同一首"时 seek；新歌 seekTo=0，直接从头开始
+                val target = (seekTo * 1000).toLong()
+                if (target > 1000) {
+                    val dur = try { player.duration } catch (e: Exception) { 0L }
+                    player.seekTo(if (dur > 0 && target > dur - 3000) maxOf(0L, dur - 5000) else target)
+                }
+                player.playWhenReady = !pausedNow
+                // 别无条件 player.play()：加载完成时如果服务端是暂停状态，
+                // 直接 play() 会把暂停顶掉，歌在自己唱、服务端还以为暂停着
                 preparing.visibility = View.GONE
             }
         }.start()
@@ -418,6 +464,9 @@ class MainActivity : AppCompatActivity() {
         player.stop()
         player.clearMediaItems()
         lastToken = -1
+        loadedQid = ""
+        mediaSongId = ""
+        mediaToken = -1
         Thread { post("/api/player/next") }.start()
     }
 
@@ -492,6 +541,10 @@ class MainActivity : AppCompatActivity() {
             player.stop()
             player.clearMediaItems()
             lastToken = -1
+            loadedQid = ""
+            mediaSongId = ""
+            mediaToken = -1
+            hideProgress()
             preparing.visibility = View.GONE
             return
         }
@@ -544,10 +597,18 @@ class MainActivity : AppCompatActivity() {
         val token = current.optInt("token", 0)
         if (token != lastToken) {
             lastToken = token
-            val pos = current.optDouble("position", 0.0)
-            val posAt = current.optLong("positionAt", System.currentTimeMillis())
-            val est = if (current.optBoolean("paused")) pos else pos + (System.currentTimeMillis() - posAt) / 1000.0
-            loadSong(song.optString("id"), est, track)
+            val qid = current.optString("qid")
+            // qid 变了才是换了新歌：必须从 0 开始唱。
+            // 这里原本是拿"本机时间 - 服务端 positionAt"外推，投影仪时钟和 NAS 差几十秒时，
+            // 新歌直接被 seek 到几十秒甚至几分钟之后 —— 这就是"从半中间开始播"的根因。
+            val isNewSong = qid != loadedQid
+            loadedQid = qid
+            var pos = current.optDouble("positionNow", current.optDouble("position", 0.0))
+            val dur = current.optDouble("duration", 0.0)
+            if (isNewSong) pos = 0.0
+            // 续播位置如果已经贴到片尾，也从头开始，避免"一开就结束"
+            if (dur > 0 && pos > dur - 10) pos = 0.0
+            loadSong(song.optString("id"), pos, track, token = token)
         }
     }
 
@@ -663,6 +724,19 @@ class MainActivity : AppCompatActivity() {
         findViewById<Button>(R.id.amSongs).setOnClickListener { openBrowser() }
         findViewById<Button>(R.id.amRewind).setOnClickListener { startSeek(-1); main.postDelayed({ stopSeek() }, 2000) }
         findViewById<Button>(R.id.amForward).setOnClickListener { startSeek(1); main.postDelayed({ stopSeek() }, 2000) }
+        findViewById<Button>(R.id.amExit).setOnClickListener { confirmExit() }
+
+        // 首字母输入框 / 清空
+        findViewById<Button>(R.id.btnInitialDel).setOnClickListener {
+            if (initials.isNotEmpty()) initials = initials.dropLast(1)
+            focusListAfterLoad = false
+            refreshBrowser()
+        }
+        findViewById<Button>(R.id.btnInitialClear).setOnClickListener {
+            initials = ""
+            focusListAfterLoad = false
+            refreshBrowser()
+        }
 
         // 点画面 = 显示/隐藏操作菜单（触屏备用，遥控器用 ↓）
         playerView.setOnClickListener {
@@ -717,7 +791,8 @@ class MainActivity : AppCompatActivity() {
         // 用 dispatch 而不是 onKeyDown：焦点一旦落在播放器视图上，OK 会在子 View 层被
         // 当成"点击"消费掉（弹操作菜单），永远到不了 onKeyDown——之前就是这个坑。
         val inBrowser = browserPanel.visibility == View.VISIBLE
-        if (!errorShown && !menuOpen && !inBrowser &&
+        // 已点侧栏打开时，OK 要能按在侧栏按钮上（置顶/删除），不能被这里抢去暂停
+        if (!errorShown && !menuOpen && !inBrowser && !queueOpen &&
             event.action == KeyEvent.ACTION_DOWN &&
             (event.keyCode == KeyEvent.KEYCODE_DPAD_CENTER ||
                 event.keyCode == KeyEvent.KEYCODE_ENTER ||
@@ -738,9 +813,10 @@ class MainActivity : AppCompatActivity() {
             }
         }
 
-        // 返回键：播放页 → 点歌台 → 播放页（后台歌曲不停）；菜单开着先收菜单
+        // 返回键：播放页 → 点歌台 → 播放页（后台歌曲不停）；菜单/已点侧栏开着先收掉
         if (keyCode == KeyEvent.KEYCODE_BACK) {
             if (menuOpen) { hideActionMenu(); return true }
+            if (queueOpen) { toggleQueuePanel(); return true }
             if (browserPanel.visibility == View.VISIBLE) {
                 if (artistName.isNotEmpty()) {
                     artistName = ""
@@ -766,6 +842,9 @@ class MainActivity : AppCompatActivity() {
 
         val inBrowser = browserPanel.visibility == View.VISIBLE
         if (inBrowser) return super.onKeyDown(keyCode, event)
+
+        // 已点侧栏开着：方向键交给系统做焦点导航，别去抢着快进/弹菜单
+        if (queueOpen) return super.onKeyDown(keyCode, event)
 
         // 菜单打开时，方向键交给系统做焦点导航（↓ 自己收起菜单）
         if (menuOpen) {
@@ -838,9 +917,10 @@ class MainActivity : AppCompatActivity() {
         return super.onKeyUp(keyCode, event)
     }
 
-    /** 2 倍速快进/快退：每 250ms 走 0.5 秒 */
+    /** 2 倍速快进/快退：每 250ms 走 0.5 秒，同时把进度条亮出来 */
     private fun startSeek(dir: Int) {
         seekDir = dir
+        showProgress()
         toastMsg(if (dir > 0) "⏩ 快进 ×2" else "⏪ 快退 ×2")
         main.removeCallbacks(seekTicker)
         main.post(seekTicker)
@@ -853,6 +933,7 @@ class MainActivity : AppCompatActivity() {
             val max = if (dur > 0) dur else Long.MAX_VALUE
             val target = (player.currentPosition + seekDir * 500L).coerceIn(0L, max)
             player.seekTo(target)
+            updateProgress()
             main.postDelayed(this, 250)
         }
     }
@@ -862,12 +943,58 @@ class MainActivity : AppCompatActivity() {
         seekDir = 0
         main.removeCallbacks(seekTicker)
         val pos = player.currentPosition / 1000.0
-        Thread { post("/api/player/report", """{"position":$pos}""") }.start()
+        Thread { post("/api/player/report", """{"position":$pos,"songId":"$mediaSongId","token":$mediaToken}""") }.start()
+        // 松开按键后如果菜单没开，进度条再留 1 秒让人看清落点
+        main.postDelayed({ if (!menuOpen && seekDir == 0) hideProgress() }, 1000)
+    }
+
+    /* ---------------- 进度条 ---------------- */
+
+    private var progressTickerRunning = false
+    private val progressTicker = object : Runnable {
+        override fun run() {
+            if (progressPanel.visibility != View.VISIBLE) {
+                progressTickerRunning = false
+                return
+            }
+            updateProgress()
+            main.postDelayed(this, 300)
+        }
+    }
+
+    private fun updateProgress() {
+        val dur = try { player.duration } catch (e: Exception) { 0L }
+        val pos = try { player.currentPosition } catch (e: Exception) { 0L }
+        progBar.progress = if (dur > 0) ((pos.toDouble() / dur) * 1000).toInt().coerceIn(0, 1000) else 0
+        progNow.text = fmtTime(pos)
+        progAll.text = if (dur > 0) fmtTime(dur) else "--:--"
+    }
+
+    private fun fmtTime(ms: Long): String {
+        val s = (ms / 1000).coerceAtLeast(0)
+        return String.format("%02d:%02d", s / 60, s % 60)
+    }
+
+    private fun showProgress() {
+        if (!hasCurrent || errorShown) return
+        progressPanel.visibility = View.VISIBLE
+        updateProgress()
+        if (!progressTickerRunning) {
+            progressTickerRunning = true
+            main.post(progressTicker)
+        }
+    }
+
+    private fun hideProgress() {
+        progressPanel.visibility = View.GONE
+        progressTickerRunning = false
+        main.removeCallbacks(progressTicker)
     }
 
     private fun showActionMenu() {
         menuOpen = true
         actionMenu.visibility = View.VISIBLE
+        showProgress()
         findViewById<View>(R.id.amPause)?.requestFocus()
         main.postDelayed({ if (menuOpen) hideActionMenu() }, 15000)
     }
@@ -875,6 +1002,7 @@ class MainActivity : AppCompatActivity() {
     private fun hideActionMenu() {
         menuOpen = false
         actionMenu.visibility = View.GONE
+        if (seekDir == 0) hideProgress()
     }
 
     private fun toggleQueuePanel() {
@@ -883,7 +1011,60 @@ class MainActivity : AppCompatActivity() {
         if (queueOpen) {
             queueBadge.text = "已点 ${lastQueue.length()} 首"
             renderQueue(lastQueue)
+            // 侧栏的按钮必须能拿到焦点，不然遥控器按不动「置顶 / 删除」
+            main.post { focusFirstQueueButton() }
         }
+    }
+
+    private fun focusFirstQueueButton() {
+        if (!queueOpen) return
+        for (i in 0 until queueListBox.childCount) {
+            val row = queueListBox.getChildAt(i) as? LinearLayout ?: continue
+            for (j in 0 until row.childCount) {
+                val b = row.getChildAt(j) as? Button
+                if (b != null && b.isFocusable) { b.requestFocus(); return }
+            }
+        }
+    }
+
+    /* ---------------- 关闭系统（彻底杀进程，下次是全新启动） ---------------- */
+
+    private var exiting = false
+
+    private fun confirmExit() {
+        AlertDialog.Builder(this)
+            .setTitle("关闭 KTV")
+            .setMessage("彻底退出程序（连后台进程一起结束），下次打开是全新启动。\n当前这首会暂停。")
+            .setPositiveButton("立即关闭") { _, _ -> exitApp() }
+            .setNegativeButton("取消", null)
+            .show()
+    }
+
+    private fun exitApp() {
+        if (exiting) return
+        exiting = true
+        hideActionMenu()
+        toastMsg("正在关闭…")
+        Thread {
+            // 先告诉 NAS「暂停」：否则服务端以为还在唱，下次打开进度已经跑出去几分钟
+            post("/api/player/pause")
+            main.post { hardExit() }
+        }.start()
+        // 服务器没响应也不能卡住：1.5 秒后强制退出
+        main.postDelayed({ hardExit() }, 1500)
+    }
+
+    private fun hardExit() {
+        releasePlayer()
+        finishAndRemoveTask()
+        Process.killProcess(Process.myPid())
+    }
+
+    private fun releasePlayer() {
+        if (playerReleased) return
+        playerReleased = true
+        try { player.stop() } catch (_: Exception) {}
+        try { player.release() } catch (_: Exception) {}
     }
 
     /* ---------------- 设置 ---------------- */
@@ -972,12 +1153,13 @@ class MainActivity : AppCompatActivity() {
             b.setOnClickListener {
                 tab = t
                 artistName = ""
+                focusListAfterLoad = true
                 refreshBrowser()
             }
             tabRow.addView(b)
         }
         // 中间字母 / 数字索引：每行 5 个大按钮
-        // A-E F-J K-O P-T U-Y | Z 0 1 2 3 | 4 5 6 7 8 | 9 全
+        // A-E F-J K-O P-T U-Y | Z 0 1 2 3 | 4 5 6 7 8 | 9 清
         lettersGrid.removeAllViews()
         letterButtons.clear()
         val keys: List<Char> = ('A'..'Z') + ('0'..'9') + ' '
@@ -988,13 +1170,20 @@ class MainActivity : AppCompatActivity() {
                 LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT
             )
             rowKeys.forEach { c ->
-                val label = if (c == ' ') "全" else c.toString()
+                val label = if (c == ' ') "清" else c.toString()
                 val b = letterChip(label)
                 b.tag = "letter:$c"
                 b.setOnClickListener {
-                    letter = if (c == ' ') "" else c.toString()
+                    // 连点字母 = 连续输入首字母（s → sl → sldya），
+                    // 列表原地刷新、光标留在字母区，不用每按一个键就跳回列表
+                    if (c == ' ') {
+                        initials = ""
+                    } else if (initials.length < 12) {
+                        initials += c.lowercaseChar()
+                    }
                     if (tab == Tab.QUEUE || tab == Tab.FAVS) tab = Tab.SONGS
                     artistName = ""
+                    focusListAfterLoad = false
                     refreshBrowser()
                 }
                 letterButtons[c] = b
@@ -1005,6 +1194,22 @@ class MainActivity : AppCompatActivity() {
             }
             lettersGrid.addView(rowBox)
         }
+
+        // 首字母输入框：按 OK 直接从输入框跳到歌曲列表
+        initialsBox.isFocusable = true
+        initialsBox.isFocusableInTouchMode = true
+        initialsBox.setOnFocusChangeListener { _, has ->
+            initialsBox.background = roundBg(
+                if (has) 0xFF3A2030.toInt() else 0xFF1F2230.toInt(),
+                if (has) C_FOCUS else 0xFF2E3342.toInt(),
+                if (has) 2 else 1,
+            )
+        }
+        initialsBox.setOnClickListener {
+            focusListAfterLoad = true
+            focusFirstOrderButton()
+        }
+        paintInitials()
     }
 
     /** 点歌台内按三道杠：歌名 → 歌星 → 排行 → 收藏 → 已点 → 歌名 */
@@ -1012,14 +1217,16 @@ class MainActivity : AppCompatActivity() {
         val values = Tab.values()
         tab = values[(tab.ordinal + 1) % values.size]
         artistName = ""
+        focusListAfterLoad = true
         refreshBrowser()
     }
 
     private fun openBrowser() {
-        // 回到"点歌首页"：歌名大类、不筛字母；光标停在中间的字母 M 上
+        // 回到"点歌首页"：歌名大类、清空首字母
         tab = Tab.SONGS
         artistName = ""
-        letter = ""
+        initials = ""
+        focusListAfterLoad = true
         browserPanel.visibility = View.VISIBLE
         idleView.visibility = View.GONE
         queuePanel.visibility = View.GONE
@@ -1048,7 +1255,12 @@ class MainActivity : AppCompatActivity() {
     }
 
     private fun refreshBrowser() {
-        browserTitle.text = if (artistName.isNotEmpty()) "点歌台 · 🎤 $artistName" else "点歌台 · ${tab.label}"
+        val searching = initials.isNotEmpty()
+        browserTitle.text = when {
+            artistName.isNotEmpty() -> "点歌台 · 🎤 $artistName"
+            searching -> "首字母 ${initials.uppercase()} · ${tab.label}"
+            else -> "点歌台 · ${tab.label}"
+        }
         // 大类选中态：整块填充 + 白字；未选中：深底灰字描边——投影仪远看也能分清
         tabRow.forEach { v ->
             val b = v as Button
@@ -1074,15 +1286,24 @@ class MainActivity : AppCompatActivity() {
                         val songs = if (artistName.isNotEmpty()) songListOf(
                             "/api/songs?artist=" + urlencode(artistName) + "&limit=200"
                         ) else songListOf(
-                            "/api/songs?sort=default&lang=" + urlencode(lang) + "&type=" + urlencode(type) +
-                                "&letter=" + letter + "&limit=60"
+                            // qscope=title：只按歌名（含拼音首字母）搜，不带歌手首字母，
+                            // 否则输入 sldya 会把首字母同样是 s 的歌手的所有歌都翻出来
+                            "/api/songs?q=" + urlencode(initials) + "&qscope=title&sort=default&lang=" +
+                                urlencode(lang) + "&type=" + urlencode(type) + "&limit=60"
                         )
                         main.post {
                             listContainer.removeAllViews()
-                            if (songs.length() == 0) listContainer.addView(hintRow("没有找到歌曲"))
+                            if (songs.length() == 0) {
+                                listContainer.addView(
+                                    hintRow(
+                                        if (searching) "没有首字母是 ${initials.uppercase()} 的歌\n按 ⌫ 退格，或清空重新输"
+                                        else "没有找到歌曲"
+                                    )
+                                )
+                            }
                             for (i in 0 until songs.length()) addSongRow(songs.getJSONObject(i), i + 1)
                             refreshOrderButtons()
-                            focusFirstOrderButton()
+                            maybeFocusFirst()
                         }
                     }
                     Tab.HOT -> {
@@ -1092,7 +1313,7 @@ class MainActivity : AppCompatActivity() {
                             if (songs.length() == 0) listContainer.addView(hintRow("曲库为空"))
                             for (i in 0 until songs.length()) addSongRow(songs.getJSONObject(i), i + 1)
                             refreshOrderButtons()
-                            focusFirstOrderButton()
+                            maybeFocusFirst()
                         }
                     }
                     Tab.FAVS -> {
@@ -1102,7 +1323,7 @@ class MainActivity : AppCompatActivity() {
                             if (songs.length() == 0) listContainer.addView(hintRow("还没有收藏，用手机或 ♥ 收藏歌曲"))
                             for (i in 0 until songs.length()) addSongRow(songs.getJSONObject(i), i + 1)
                             refreshOrderButtons()
-                            focusFirstOrderButton()
+                            maybeFocusFirst()
                         }
                     }
                     Tab.ARTISTS -> {
@@ -1112,11 +1333,11 @@ class MainActivity : AppCompatActivity() {
                                 listContainer.removeAllViews()
                                 for (i in 0 until songs.length()) addSongRow(songs.getJSONObject(i), i + 1)
                                 refreshOrderButtons()
-                                focusFirstOrderButton()
+                                maybeFocusFirst()
                             }
                         } else {
                             val artists = JSONObject(
-                                get("/api/artists?letter=" + letter + "&region=" + urlencode(region) +
+                                get("/api/artists?q=" + urlencode(initials) + "&region=" + urlencode(region) +
                                     "&gender=" + urlencode(gender) + "&limit=100") ?: "{}"
                             ).optJSONArray("items") ?: JSONArray()
                             main.post {
@@ -1270,13 +1491,27 @@ class MainActivity : AppCompatActivity() {
         "男" -> "男歌手"; "女" -> "女歌手"; "组合" -> "组合/乐队"; else -> "全部歌手"
     }
 
-    /** 字母网格的选中态：选中的字母整块变红，未选中深底绿字（参考手绘稿的绿色大字母） */
+    /** 字母网格：只做输入用，选中态靠上面的输入框表达，这里统一深底绿字，避免一堆红块 */
     private fun paintLetters() {
-        letterButtons.forEach { (c, b) ->
-            val on = if (c == ' ') letter.isEmpty() else letter == c.toString()
-            b.background = roundBg(if (on) C_ACC else C_CARD, if (on) C_ACC else 0xFF2E3342.toInt(), 1)
-            b.setTextColor(if (on) Color.WHITE else C_OK)
-            b.typeface = if (on) Typeface.DEFAULT_BOLD else Typeface.DEFAULT_BOLD
+        letterButtons.forEach { (_, b) ->
+            // 拿着焦点的按钮不能重画成普通态，否则按完字母红色选中框就"消失"了
+            if (b.hasFocus()) return@forEach
+            b.background = roundBg(C_CARD, 0xFF2E3342.toInt(), 1)
+            b.setTextColor(C_OK)
+            b.typeface = Typeface.DEFAULT_BOLD
+        }
+        paintInitials()
+    }
+
+    /** 首字母输入框：已输入的字母用大字显示，光标块提示"还能接着输" */
+    @SuppressLint("SetTextI18n")
+    private fun paintInitials() {
+        if (initials.isEmpty()) {
+            initialsBox.text = "首字母"
+            initialsBox.setTextColor(0xFF8F97A8.toInt())
+        } else {
+            initialsBox.text = initials.uppercase().map { it.toString() }.joinToString(" ") + " ▏"
+            initialsBox.setTextColor(C_GOLD)
         }
     }
 
@@ -1583,6 +1818,11 @@ class MainActivity : AppCompatActivity() {
         }
     }
 
+    /** 刷新完要不要抢焦点：连续输入首字母时不抢，光标留在字母区 */
+    private fun maybeFocusFirst() {
+        if (focusListAfterLoad) focusFirstOrderButton()
+    }
+
     private fun addArtistRow(artist: JSONObject) {
         val name = artist.optString("name")
         val id = artist.optString("id")
@@ -1610,6 +1850,7 @@ class MainActivity : AppCompatActivity() {
         row.setOnClickListener {
             artistName = name
             tab = Tab.SONGS
+            focusListAfterLoad = true
             refreshBrowser()
         }
 
@@ -1734,7 +1975,7 @@ class MainActivity : AppCompatActivity() {
 
     override fun onDestroy() {
         super.onDestroy()
-        player.release()
+        releasePlayer()
     }
 }
 

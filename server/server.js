@@ -680,6 +680,8 @@ const server = http.createServer(async (req, res) => {
             position: typeof body.position === 'number' ? body.position : undefined,
             paused: typeof body.paused === 'boolean' ? body.paused : undefined,
             ended: !!body.ended,
+            songId: typeof body.songId === 'string' ? body.songId : undefined,
+            token: typeof body.token === 'number' ? body.token : undefined,
           });
           return json(res, 200, { ok: true }); // 高频率上报，不回状态
         default:
